@@ -5192,6 +5192,9 @@ int dsi_panel_prepare(struct dsi_panel *panel)
 		}
 	}
 
+	if (panel->init_delay_us)
+		usleep_range(panel->init_delay_us, panel->init_delay_us);
+
 	rc = dsi_panel_tx_cmd_set(panel, DSI_CMD_SET_PRE_ON);
 	if (rc) {
 		DSI_ERR("[%s] failed to send DSI_CMD_SET_PRE_ON cmds, rc=%d\n",
