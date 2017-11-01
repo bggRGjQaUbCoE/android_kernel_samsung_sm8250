@@ -7031,6 +7031,8 @@ static int select_idle_cpu(struct task_struct *p, struct sched_domain *sd, int t
 			return -1;
 		if (cpu_isolated(cpu))
 			continue;
+		if (cpu_isolated(cpu))
+			continue;
 		if (available_idle_cpu(cpu))
 			break;
 	}
