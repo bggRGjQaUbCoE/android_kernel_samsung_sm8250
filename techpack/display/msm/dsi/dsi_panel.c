@@ -5175,6 +5175,9 @@ int dsi_panel_prepare(struct dsi_panel *panel)
 #endif
 	mutex_lock(&panel->panel_lock);
 
+	if (panel->init_delay_us)
+		usleep_range(panel->init_delay_us, panel->init_delay_us);
+
 	if (panel->lp11_init) {
 		rc = dsi_panel_power_on(panel);
 		if (rc) {
@@ -5183,9 +5186,6 @@ int dsi_panel_prepare(struct dsi_panel *panel)
 			goto error;
 		}
 	}
-
-	if (panel->init_delay_us)
-		usleep_range(panel->init_delay_us, panel->init_delay_us);
 
 	rc = dsi_panel_tx_cmd_set(panel, DSI_CMD_SET_PRE_ON);
 	if (rc) {
