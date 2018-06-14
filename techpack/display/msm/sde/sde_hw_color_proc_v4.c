@@ -309,6 +309,11 @@ void sde_setup_dspp_pccv4(struct sde_hw_dspp *ctx, void *cfg)
 		SDE_REG_WRITE(&ctx->hw, base + PCC_RB_OFF, coeffs->rb);
 		SDE_REG_WRITE(&ctx->hw, base + PCC_GB_OFF, coeffs->gb);
 		SDE_REG_WRITE(&ctx->hw, base + PCC_RGB_OFF, coeffs->rgb);
+#if 0
+		pr_info("%s [CLEANSLATE] kcal setup... drm_msm_pcc i %d r %d (rg %d) r_rr %d r_gg %d r_bb %d  \n",__func__, i, coeffs->r, coeffs->rg, pcc_cfg->r_rr, pcc_cfg->r_gg, pcc_cfg->r_bb);
+		pr_info("%s [CLEANSLATE] kcal setup... drm_msm_pcc i %d g %d (rb %d) g_rr %d g_gg %d g_bb %d  \n",__func__, i, coeffs->g, coeffs->rb, pcc_cfg->g_rr, pcc_cfg->g_gg, pcc_cfg->g_bb);
+		pr_info("%s [CLEANSLATE] kcal setup... drm_msm_pcc i %d b %d (gb %d rgb %d) b_rr %d b_gg %d b_bb %d  \n",__func__, i, coeffs->b, coeffs->gb, coeffs->rgb, pcc_cfg->b_rr, pcc_cfg->b_gg, pcc_cfg->b_bb);
+#endif
 	}
 
 	opcode = SDE_REG_READ(&ctx->hw, ctx->cap->sblk->hsic.base);
