@@ -134,6 +134,9 @@ struct schedtune {
 
 	/* Dynamic boost value for tasks on that SchedTune CGroup */
 	int dynamic_boost;
+
+	/* Number of ongoing boosts for this SchedTune CGroup */
+	int boost_count;
 #endif /* CONFIG_DYNAMIC_STUNE_BOOST */
 };
 
@@ -176,6 +179,7 @@ root_schedtune = {
 #ifdef CONFIG_DYNAMIC_STUNE_BOOST
 	.boost_default = 0,
 	.dynamic_boost = 0,
+	.boost_count = 0,
 #endif /* CONFIG_DYNAMIC_STUNE_BOOST */
 };
 
@@ -1119,6 +1123,7 @@ static int _do_stune_boost(struct schedtune *st)
 	int ret = 0;
 
 	mutex_lock(&stune_boost_mutex);
+	++(st->boost_count);
 
 	/* Boost if new value is greater than current */
 	if (st->boost_cur > st->boost)
@@ -1134,7 +1139,11 @@ static int _reset_stune_boost(struct schedtune *st)
 	int ret = 0;
 
 	mutex_lock(&stune_boost_mutex);
-	ret = dynamic_boost(st, st->boost_default);
+	if (st->boost_count == 1)
+		ret = dynamic_boost(st, st->boost_default);
+
+	if (st->boost_count >= 1)
+		--(st->boost_count);
 	mutex_unlock(&stune_boost_mutex);
 
 	return ret;
