@@ -1149,7 +1149,7 @@ static int _reset_stune_boost(struct schedtune *st)
 	return ret;
 }
 
-static void dsb_worker(struct work_struct *work)
+int do_stune_sched_boost(char *st_name)
 {
 	struct schedtune *st = container_of(work, struct schedtune, dsb_work);
 	
