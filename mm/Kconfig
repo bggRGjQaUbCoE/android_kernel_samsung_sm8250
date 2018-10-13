@@ -1016,3 +1016,7 @@ config HIGHATOMIC_PAGEBLOCKS
 	  This value limits max number of highatomic pageblocks.
 
 source "mm/sec_mm/Kconfig"
+
+config VMSTAT_INTERVAL
+	int "Default interval in seconds to update vmstat"
+	default 1
