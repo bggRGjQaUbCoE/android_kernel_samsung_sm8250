@@ -70,15 +70,13 @@ extern struct rw_semaphore *rwsem_downgrade_wake(struct rw_semaphore *sem);
 #include <cpu/ftt/ftt_rwsem.h>
 #endif
 
-/* Include the arch specific part */
-#include <asm/rwsem.h>
-
 /* In all implementations count != 0 means locked */
 static inline int rwsem_is_locked(struct rw_semaphore *sem)
 {
 	return atomic_long_read(&sem->count) != 0;
 }
 
+#define RWSEM_UNLOCKED_VALUE		0L
 #define __RWSEM_INIT_COUNT(name)	.count = ATOMIC_LONG_INIT(RWSEM_UNLOCKED_VALUE)
 #endif
 
