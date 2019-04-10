@@ -2,6 +2,7 @@ Runtime locking correctness validator
 =====================================
 
 started by Ingo Molnar <mingo@redhat.com>
+
 additions by Arjan van de Ven <arjan@linux.intel.com>
 
 Lock-class
@@ -41,8 +42,9 @@ Where STATE can be either one of (kernel/locking/lockdep_states.h)
 
 - 'ever used'                                       [ == !unused        ]
 
-When locking rules are violated, these state bits are presented in the
-locking error messages, inside curlies. A contrived example:
+When locking rules are violated, these usage bits are presented in the
+locking error messages, inside curlies, with a total of 2 * n STATEs bits.
+A contrived example::
 
    modprobe/2287 is trying to acquire lock:
     (&sio_locks[i].lock){-.-...}, at: [<c02867fd>] mutex_lock+0x21/0x24
@@ -54,20 +56,49 @@ locking error messages, inside curlies. A contrived example:
 The bit position indicates STATE, STATE-read, for each of the states listed
 above, and the character displayed in each indicates:
 
+   ===  ===================================================
    '.'  acquired while irqs disabled and not in irq context
    '-'  acquired in irq context
    '+'  acquired with irqs enabled
    '?'  acquired in irq context with irqs enabled.
+   ===  ===================================================
 
-Unused mutexes cannot be part of the cause of an error.
+The bits are illustrated with an example::
+
+    (&sio_locks[i].lock){-.-.}, at: [<c02867fd>] mutex_lock+0x21/0x24
+                         ||||
+                         ||| \-> softirq disabled and not in softirq context
+                         || \--> acquired in softirq context
+                         | \---> hardirq disabled and not in hardirq context
+                          \----> acquired in hardirq context
+
+
+For a given STATE, whether the lock is ever acquired in that STATE
+context and whether that STATE is enabled yields four possible cases as
+shown in the table below. The bit character is able to indicate which
+exact case is for the lock as of the reporting time.
+
+  +--------------+-------------+--------------+
+  |              | irq enabled | irq disabled |
+  +--------------+-------------+--------------+
+  | ever in irq  |      ?      |       -      |
+  +--------------+-------------+--------------+
+  | never in irq |      +      |       .      |
+  +--------------+-------------+--------------+
+
+The character '-' suggests irq is disabled because if otherwise the
+charactor '?' would have been shown instead. Similar deduction can be
+applied for '+' too.
+
+Unused locks (e.g., mutexes) cannot be part of the cause of an error.
 
 
 Single-lock state rules:
 ------------------------
 
 A softirq-unsafe lock-class is automatically hardirq-unsafe as well. The
-following states are exclusive, and only one of them is allowed to be
-set for any lock-class:
+following states must be exclusive: only one of them is allowed to be set
+for any lock-class based on its usage::
 
  <hardirq-safe> and <hardirq-unsafe>
  <softirq-safe> and <softirq-unsafe>
@@ -81,7 +112,7 @@ Multi-lock dependency rules:
 The same lock-class must not be acquired twice, because this could lead
 to lock recursion deadlocks.
 
-Furthermore, two locks may not be taken in different order:
+Furthermore, two locks can not be taken in inverse order::
 
  <L1> -> <L2>
  <L2> -> <L1>
@@ -92,7 +123,7 @@ other locking sequence between the acquire-lock operations, the
 validator will still track all dependencies between locks.)
 
 Furthermore, the following usage based lock dependencies are not allowed
-between any two lock-classes:
+between any two lock-classes::
 
    <hardirq-safe>   ->  <hardirq-unsafe>
    <softirq-safe>   ->  <softirq-unsafe>
@@ -148,16 +179,16 @@ the ordering is not static.
 In order to teach the validator about this correct usage model, new
 versions of the various locking primitives were added that allow you to
 specify a "nesting level". An example call, for the block device mutex,
-looks like this:
+looks like this::
 
-enum bdev_bd_mutex_lock_class
-{
+  enum bdev_bd_mutex_lock_class
+  {
        BD_MUTEX_NORMAL,
        BD_MUTEX_WHOLE,
        BD_MUTEX_PARTITION
-};
+  };
 
- mutex_lock_nested(&bdev->bd_contains->bd_mutex, BD_MUTEX_PARTITION);
+mutex_lock_nested(&bdev->bd_contains->bd_mutex, BD_MUTEX_PARTITION);
 
 In this case the locking is done on a bdev object that is known to be a
 partition.
@@ -178,7 +209,7 @@ must be held: lockdep_assert_held*(&lock) and lockdep_*pin_lock(&lock).
 As the name suggests, lockdep_assert_held* family of macros assert that a
 particular lock is held at a certain time (and generate a WARN() otherwise).
 This annotation is largely used all over the kernel, e.g. kernel/sched/
-core.c
+core.c::
 
   void update_rq_clock(struct rq *rq)
   {
@@ -197,7 +228,7 @@ out to be especially helpful to debug code with callbacks, where an upper
 layer assumes a lock remains taken, but a lower layer thinks it can maybe drop
 and reacquire the lock ("unwittingly" introducing races). lockdep_pin_lock()
 returns a 'struct pin_cookie' that is then used by lockdep_unpin_lock() to check
-that nobody tampered with the lock, e.g. kernel/sched/sched.h
+that nobody tampered with the lock, e.g. kernel/sched/sched.h::
 
   static inline void rq_pin_lock(struct rq *rq, struct rq_flags *rf)
   {
@@ -224,7 +255,7 @@ correctness) in the sense that for every simple, standalone single-task
 locking sequence that occurred at least once during the lifetime of the
 kernel, the validator proves it with a 100% certainty that no
 combination and timing of these locking sequences can cause any class of
-lock related deadlock. [*]
+lock related deadlock. [1]_
 
 I.e. complex multi-CPU and multi-task locking scenarios do not have to
 occur in practice to prove a deadlock: only the simple 'component'
@@ -243,7 +274,9 @@ possible combination of locking interaction between CPUs, combined with
 every possible hardirq and softirq nesting scenario (which is impossible
 to do in practice).
 
-[*] assuming that the validator itself is 100% correct, and no other
+.. [1]
+
+    assuming that the validator itself is 100% correct, and no other
     part of the system corrupts the state of the validator in any way.
     We also assume that all NMI/SMM paths [which could interrupt
     even hardirq-disabled codepaths] are correct and do not interfere
@@ -254,7 +287,7 @@ to do in practice).
 Performance:
 ------------
 
-The above rules require _massive_ amounts of runtime checking. If we did
+The above rules require **massive** amounts of runtime checking. If we did
 that for every lock taken and for every irqs-enable event, it would
 render the system practically unusably slow. The complexity of checking
 is O(N^2), so even with just a few hundred lock-classes we'd have to do
@@ -313,17 +346,17 @@ be harder to do than to say.
 
 Of course, if you do run out of lock classes, the next thing to do is
 to find the offending lock classes.  First, the following command gives
-you the number of lock classes currently in use along with the maximum:
+you the number of lock classes currently in use along with the maximum::
 
 	grep "lock-classes" /proc/lockdep_stats
 
-This command produces the following output on a modest system:
+This command produces the following output on a modest system::
 
-	 lock-classes:                          748 [max: 8191]
+	lock-classes:                          748 [max: 8191]
 
 If the number allocated (748 above) increases continually over time,
 then there is likely a leak.  The following command can be used to
-identify the leaking lock classes:
+identify the leaking lock classes::
 
 	grep "BD" /proc/lockdep
 
