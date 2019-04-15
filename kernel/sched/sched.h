@@ -3241,7 +3241,6 @@ task_in_cum_window_demand(struct rq *rq, struct task_struct *p)
 }
 
 static inline bool hmp_capable(void) { return false; }
-static inline bool is_max_capacity_cpu(int cpu) { return true; }
 static inline bool is_min_capacity_cpu(int cpu)
 {
 #ifdef CONFIG_SMP
@@ -3252,12 +3251,6 @@ static inline bool is_min_capacity_cpu(int cpu)
 #else
 	return true;
 #endif
-}
-
-static inline int
-preferred_cluster(struct sched_cluster *cluster, struct task_struct *p)
-{
-	return -1;
 }
 
 static inline int asym_cap_siblings(int cpu1, int cpu2) { return 0; }
