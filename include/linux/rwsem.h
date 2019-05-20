@@ -27,13 +27,14 @@ struct rw_semaphore {
 	atomic_long_t count;
 	struct list_head wait_list;
 	raw_spinlock_t wait_lock;
-#ifdef CONFIG_RWSEM_SPIN_ON_OWNER
-	struct optimistic_spin_queue osq; /* spinner MCS lock */
+
 	/*
-	 * Write owner. Used as a speculative check to see
-	 * if the owner is running on the cpu.
+	 * Write owner or one of the read owners. Can be used as a
+	 * speculative check to see if the owner is running on the cpu.
 	 */
 	struct task_struct *owner;
+#ifdef CONFIG_RWSEM_SPIN_ON_OWNER
+	struct optimistic_spin_queue osq; /* spinner MCS lock */
 #endif
 
 #ifdef CONFIG_FAST_TRACK
@@ -84,7 +85,7 @@ static inline int rwsem_is_locked(struct rw_semaphore *sem)
 #endif
 #else
 #ifdef CONFIG_RWSEM_SPIN_ON_OWNER
-#define __RWSEM_OPT_INIT(lockname) , .osq = OSQ_LOCK_UNLOCKED, .owner = NULL
+#define __RWSEM_OPT_INIT(lockname) , .osq = OSQ_LOCK_UNLOCKED
 #else
 #define __RWSEM_OPT_INIT(lockname)
 #endif
@@ -98,6 +99,7 @@ static inline int rwsem_is_locked(struct rw_semaphore *sem)
 
 #define __RWSEM_INITIALIZER(name)				\
 	{ __RWSEM_INIT_COUNT(name),				\
+	  .owner = NULL,					\
 	  .wait_list = LIST_HEAD_INIT((name).wait_list),	\
 	  .wait_lock = __RAW_SPIN_LOCK_UNLOCKED(name.wait_lock)	\
 	  __RWSEM_OPT_INIT(name)				\
