@@ -882,6 +882,8 @@ struct kvm_arch {
 	bool guest_can_read_msr_platform_info;
 
 	struct task_struct *nx_lpage_recovery_thread;
+
+	struct kvm_pmu_event_filter *pmu_event_filter;
 };
 
 struct kvm_vm_stat {
