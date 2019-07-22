@@ -88,7 +88,14 @@ struct lock_class {
 	 */
 	struct list_head		lock_entry;
 
-	struct lockdep_subclass_key	*key;
+	/*
+	 * These fields represent a directed graph of lock dependencies,
+	 * to every node we attach a list of "forward" and a list of
+	 * "backward" graph nodes.
+	 */
+	struct list_head		locks_after, locks_before;
+
+	const struct lockdep_subclass_key *key;
 	unsigned int			subclass;
 	unsigned int			dep_gen_id;
 
