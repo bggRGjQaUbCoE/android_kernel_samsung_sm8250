@@ -8465,7 +8465,7 @@ sd_loop:
 	for_each_domain(cpu, tmp) {
 
 		if (!(tmp->flags & SD_LOAD_BALANCE))
-			break;
+			continue;
 
 		/*
 		 * If both 'cpu' and 'prev_cpu' are part of this domain,
