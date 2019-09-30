@@ -74,7 +74,7 @@ static FORCE_INLINE int __LZ4_decompress_generic(
 	 endCondition_directive endOnInput,
 	 /* full, partial */
 	 earlyEnd_directive partialDecoding,
-	 /* noDict, withPrefix64k, usingExtDict */
+	 /* noDict, withPrefix64k */
 	 dict_directive dict,
 	 /* always <= dst, == dst when no prefix */
 	 const BYTE * const lowPrefix,
@@ -89,7 +89,6 @@ static FORCE_INLINE int __LZ4_decompress_generic(
 	BYTE * const oend = dst + outputSize;
 	BYTE *cpy;
 
-	const BYTE * const dictEnd = (const BYTE *)dictStart + dictSize;
 	static const unsigned int inc32table[8] = {0, 1, 2, 1, 0, 4, 4, 4};
 	static const int dec64table[8] = {0, 0, 0, -1, -4, 1, 2, 3};
 
@@ -335,6 +334,7 @@ _copy_match:
 
 		length += MINMATCH;
 
+#if 0
 		/* match starting within external dictionary */
 		if ((dict == usingExtDict) && (match < lowPrefix)) {
 			if (unlikely(op + length > oend - LASTLITERALS)) {
@@ -376,6 +376,7 @@ _copy_match:
 			}
 			continue;
 		}
+#endif
 
 		/* copy match within block */
 		cpy = op + length;
@@ -504,6 +505,7 @@ int LZ4_decompress_safe(const char *source, char *dest,
 	return __LZ4_decompress_generic(source, dest, srcPtr, dstPtr, compressedSize, maxDecompressedSize, endOnInputSize, decode_full_block, noDict, (BYTE *)dest, NULL, 0);
 }
 
+#if 0
 int LZ4_decompress_safe_partial(const char *src, char *dst,
 	int compressedSize, int targetOutputSize, int dstCapacity, bool dip)
 {
@@ -523,6 +525,7 @@ int LZ4_decompress_safe_partial(const char *src, char *dst,
     /* Finish in safe */
 	return __LZ4_decompress_generic(src, dst, srcPtr, dstPtr, compressedSize, dstCapacity, endOnInputSize, partial_decode, noDict, (BYTE *)dst, NULL, 0);
 }
+#endif
 
 int LZ4_decompress_fast(const char *source, char *dest, int originalSize)
 {
@@ -532,6 +535,7 @@ int LZ4_decompress_fast(const char *source, char *dest, int originalSize)
 				      (BYTE *)dest - 64 * KB, NULL, 0);
 }
 
+#if 0
 /* ===== Instantiate a few more decoding cases, used more than once. ===== */
 
 static int LZ4_decompress_safe_withPrefix64k(const char *source, char *dest,
@@ -753,6 +757,7 @@ int LZ4_decompress_fast_usingDict(const char *source, char *dest,
 	return LZ4_decompress_fast_extDict(source, dest, originalSize,
 		dictStart, dictSize);
 }
+#endif
 
 #ifndef STATIC
 EXPORT_SYMBOL(LZ4_decompress_safe);
