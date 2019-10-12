@@ -33,24 +33,9 @@ if [ -d "$D/initrd" ]; then
     exit 0
 fi
 
-T=${TMPDIR-/tmp}/mkinitrd.sh.$$
-trap 'rm -rf $T' 0 2
-mkdir $T
-
-cat > $T/init << '__EOF___'
-#!/bin/sh
-while :
-do
-	sleep 1000000
-done
-__EOF___
-
-# Try using dracut to create initrd
-command -v dracut >/dev/null 2>&1 || { echo >&2 "Dracut not installed"; exit 1; }
-echo Creating $D/initrd using dracut.
-
-# Filesystem creation
-dracut --force --no-hostonly --no-hostonly-cmdline --module "base" $T/initramfs.img
+# Create a C-language initrd/init infinite-loop program and statically
+# link it.  This results in a very small initrd.
+echo "Creating a statically linked C-language initrd"
 cd $D
 mkdir initrd
 cd initrd
