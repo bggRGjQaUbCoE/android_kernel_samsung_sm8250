@@ -37,6 +37,9 @@ dur=$((30*60))
 dryrun=""
 KVM="`pwd`/tools/testing/selftests/rcutorture"; export KVM
 PATH=${KVM}/bin:$PATH; export PATH
+. functions.sh
+
+TORTURE_ALLOTED_CPUS="`identify_qemu_vcpus`"
 TORTURE_DEFCONFIG=defconfig
 TORTURE_BOOT_IMAGE=""
 TORTURE_INITRD="$KVM/initrd"; export TORTURE_INITRD
@@ -50,8 +53,6 @@ configs=""
 cpus=0
 ds=`date +%Y.%m.%d-%H:%M:%S`
 jitter="-1"
-
-. functions.sh
 
 usage () {
 	echo "Usage: $scriptname optional arguments:"
@@ -102,6 +103,12 @@ do
 	--cpus)
 		checkarg --cpus "(number)" "$#" "$2" '^[0-9]*$' '^--'
 		cpus=$2
+		TORTURE_ALLOTED_CPUS="$2"
+		max_cpus="`identify_qemu_vcpus`"
+		if test "$TORTURE_ALLOTED_CPUS" -gt "$max_cpus"
+		then
+			TORTURE_ALLOTED_CPUS=$max_cpus
+		fi
 		shift
 		;;
 	--datestamp)
