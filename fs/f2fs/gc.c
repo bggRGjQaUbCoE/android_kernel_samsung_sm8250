@@ -778,7 +778,7 @@ static int move_data_block(struct inode *inode, block_t bidx,
 	struct page *page, *mpage;
 	block_t newaddr;
 	int err = 0;
-	bool lfs_mode = test_opt(fio.sbi, LFS);
+	bool lfs_mode = f2fs_lfs_mode(fio.sbi);
 
 	f2fs_cond_set_fua(&fio);
 
