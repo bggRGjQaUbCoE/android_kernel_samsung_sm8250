@@ -1765,6 +1765,9 @@ struct f2fs_sb_info {
 
 	struct workqueue_struct *post_read_wq;	/* post read workqueue */
 
+	struct kmem_cache *inline_xattr_slab;	/* inline xattr entry */
+	unsigned int inline_xattr_slab_size;	/* default inline xattr slab size */
+
 	unsigned int sec_hqm_preserve;
 	struct f2fs_sec_stat_info sec_stat;
 	struct f2fs_sec_fsck_info sec_fsck_stat;
