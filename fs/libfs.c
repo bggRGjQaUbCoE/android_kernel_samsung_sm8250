@@ -1315,7 +1315,7 @@ int generic_ci_d_compare(const struct dentry *dentry, unsigned int len,
 	if (ret >= 0)
 		return ret;
 
-	if (sb_has_enc_strict_mode(sb))
+	if (sb_has_strict_encoding(sb))
 		return -EINVAL;
 fallback:
 	if (len != name->len)
@@ -1340,7 +1340,7 @@ int generic_ci_d_hash(const struct dentry *dentry, struct qstr *str)
 
 	return 0;
 err:
-	if (sb_has_enc_strict_mode(sb))
+	if (sb_has_strict_encoding(sb))
 		ret = -EINVAL;
 	else
 		ret = 0;
@@ -1413,3 +1413,5 @@ void generic_set_encrypted_ci_d_ops(struct inode *dir, struct dentry *dentry)
 #endif
 }
 EXPORT_SYMBOL(generic_set_encrypted_ci_d_ops);
+
+
