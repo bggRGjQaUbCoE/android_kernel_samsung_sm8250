@@ -1099,10 +1099,16 @@ void sb_clear_inode_writeback(struct inode *inode)
  * the case then the inode must have been redirtied while it was being written
  * out and we don't reset its dirtied_when.
  */
+<<<<<<< HEAD
 static void redirty_tail_locked(struct inode *inode, struct bdi_writeback *wb)
 {
 	assert_spin_locked(&inode->i_lock);
 
+=======
+static void __redirty_tail(struct inode *inode, struct bdi_writeback *wb)
+{
+	assert_spin_locked(&inode->i_lock);
+>>>>>>> 762f39459ad3 (writeback: Avoid skipping inode writeback)
 	if (!list_empty(&wb->b_dirty)) {
 		struct inode *tail;
 
@@ -1117,7 +1123,11 @@ static void redirty_tail_locked(struct inode *inode, struct bdi_writeback *wb)
 static void redirty_tail(struct inode *inode, struct bdi_writeback *wb)
 {
 	spin_lock(&inode->i_lock);
+<<<<<<< HEAD
 	redirty_tail_locked(inode, wb);
+=======
+	__redirty_tail(inode, wb);
+>>>>>>> 762f39459ad3 (writeback: Avoid skipping inode writeback)
 	spin_unlock(&inode->i_lock);
 }
 
@@ -1178,6 +1188,11 @@ static int move_expired_inodes(struct list_head *delaying_queue,
 		list_move(&inode->i_io_list, &tmp);
 		moved++;
 		spin_lock(&inode->i_lock);
+<<<<<<< HEAD
+=======
+		if (flags & EXPIRE_DIRTY_ATIME)
+			inode->i_state |= I_DIRTY_TIME_EXPIRED;
+>>>>>>> 762f39459ad3 (writeback: Avoid skipping inode writeback)
 		inode->i_state |= I_SYNC_QUEUED;
 		spin_unlock(&inode->i_lock);
 		if (sb_is_blkdev_sb(inode->i_sb))
@@ -1326,7 +1341,11 @@ static void requeue_inode(struct inode *inode, struct bdi_writeback *wb,
 		 * writeback is not making progress due to locked
 		 * buffers. Skip this inode for now.
 		 */
+<<<<<<< HEAD
 		redirty_tail_locked(inode, wb);
+=======
+		__redirty_tail(inode, wb);
+>>>>>>> 762f39459ad3 (writeback: Avoid skipping inode writeback)
 		return;
 	}
 
@@ -1346,7 +1365,11 @@ static void requeue_inode(struct inode *inode, struct bdi_writeback *wb,
 			 * retrying writeback of the dirty page/inode
 			 * that cannot be performed immediately.
 			 */
+<<<<<<< HEAD
 			redirty_tail_locked(inode, wb);
+=======
+			__redirty_tail(inode, wb);
+>>>>>>> 762f39459ad3 (writeback: Avoid skipping inode writeback)
 		}
 	} else if (inode->i_state & I_DIRTY) {
 		/*
@@ -1354,7 +1377,11 @@ static void requeue_inode(struct inode *inode, struct bdi_writeback *wb,
 		 * such as delayed allocation during submission or metadata
 		 * updates after data IO completion.
 		 */
+<<<<<<< HEAD
 		redirty_tail_locked(inode, wb);
+=======
+		__redirty_tail(inode, wb);
+>>>>>>> 762f39459ad3 (writeback: Avoid skipping inode writeback)
 	} else if (inode->i_state & I_DIRTY_TIME) {
 		inode->dirtied_when = jiffies;
 		inode_io_list_move_locked(inode, wb, &wb->b_dirty_time);
@@ -1605,7 +1632,12 @@ static long writeback_sb_inodes(struct super_block *sb,
 		 */
 		spin_lock(&inode->i_lock);
 		if (inode->i_state & (I_NEW | I_FREEING | I_WILL_FREE)) {
+<<<<<<< HEAD
 			redirty_tail_locked(inode, wb);
+=======
+			inode->i_state &= ~I_SYNC_QUEUED;
+			__redirty_tail(inode, wb);
+>>>>>>> 762f39459ad3 (writeback: Avoid skipping inode writeback)
 			spin_unlock(&inode->i_lock);
 			continue;
 		}
