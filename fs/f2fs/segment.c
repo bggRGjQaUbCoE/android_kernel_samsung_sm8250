@@ -2736,7 +2736,7 @@ static void allocate_segment_by_default(struct f2fs_sb_info *sbi,
 	sbi->sec_stat.alloc_seg_type[curseg->alloc_type]++;
 }
 
-void allocate_segment_for_resize(struct f2fs_sb_info *sbi, int type,
+void f2fs_allocate_segment_for_resize(struct f2fs_sb_info *sbi, int type,
 					unsigned int start, unsigned int end)
 {
 	struct curseg_info *curseg = CURSEG_I(sbi, type);
