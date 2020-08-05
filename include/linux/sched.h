@@ -28,6 +28,7 @@
 #include <linux/mm_types_task.h>
 #include <linux/task_io_accounting.h>
 #include <linux/rseq.h>
+#include <linux/android_vendor.h>
 
 /* task_struct member predeclarations (sorted alphabetically): */
 struct audit_context;
@@ -1499,6 +1500,9 @@ struct task_struct {
 	int drawing_flag;
 	int drawing_mig_boost;
 #endif
+
+	ANDROID_VENDOR_DATA_ARRAY(1, 2);
+
 	/*
 	 * New fields for task_struct should be added above here, so that
 	 * they are included in the randomized portion of task_struct.
