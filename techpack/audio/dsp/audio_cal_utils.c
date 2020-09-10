@@ -901,6 +901,7 @@ int cal_utils_dealloc_cal(size_t data_size, void *data,
 	int ret = 0;
 	struct cal_block_data *cal_block;
 	struct audio_cal_type_dealloc *dealloc_data = data;
+	unsigned long flags = 0;
 
 	pr_debug("%s\n", __func__);
 
@@ -1075,9 +1076,11 @@ int __init cal_utils_init(void)
  *
  * @cal_block: pointer to cal block
  *
+ * @cal_type: pointer to the cal type
+ *
  * Returns true if cal block is stale, false otherwise
  */
-bool cal_utils_is_cal_stale(struct cal_block_data *cal_block)
+bool cal_utils_is_cal_stale(struct cal_block_data *cal_block, struct cal_type_data *cal_type)
 {
 	bool ret = false;
 
