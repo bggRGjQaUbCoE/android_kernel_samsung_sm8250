@@ -1880,6 +1880,12 @@ struct f2fs_sb_info {
 	struct f2fs_sec_blkops_dbg s_sec_dbg_entries[F2FS_SEC_BLKOPS_ENTRIES];
 	struct f2fs_sec_blkops_dbg s_sec_dbg_max_entry;
 #endif
+
+#ifdef CONFIG_F2FS_FS_COMPRESSION
+	struct kmem_cache *page_array_slab;	/* page array entry */
+	unsigned int page_array_slab_size;	/* default page array slab size */
+#endif
+
 };
 
 struct f2fs_private_dio {
@@ -4251,6 +4257,8 @@ void f2fs_decompress_end_io(struct page **rpages,
 int f2fs_init_compress_ctx(struct compress_ctx *cc);
 void f2fs_destroy_compress_ctx(struct compress_ctx *cc);
 void f2fs_init_compress_info(struct f2fs_sb_info *sbi);
+int f2fs_init_page_array_cache(struct f2fs_sb_info *sbi);
+void f2fs_destroy_page_array_cache(struct f2fs_sb_info *sbi);
 #else
 static inline bool f2fs_is_compressed_page(struct page *page) { return false; }
 static inline bool f2fs_is_compress_backend_ready(struct inode *inode)
@@ -4267,6 +4275,8 @@ static inline struct page *f2fs_compress_control_page(struct page *page)
 }
 static inline int f2fs_init_compress_mempool(void) { return 0; }
 static inline void f2fs_destroy_compress_mempool(void) { }
+static inline int f2fs_init_page_array_cache(struct f2fs_sb_info *sbi) { return 0; }
+static inline void f2fs_destroy_page_array_cache(struct f2fs_sb_info *sbi) { }
 #endif
 
 static inline void set_compress_context(struct inode *inode)
