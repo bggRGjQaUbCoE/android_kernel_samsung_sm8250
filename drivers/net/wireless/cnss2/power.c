@@ -4,10 +4,10 @@
 #include <linux/clk.h>
 #include <linux/delay.h>
 #include <linux/of.h>
+#include <linux/of_gpio.h>
 #include <linux/pinctrl/consumer.h>
 #include <linux/regulator/consumer.h>
 #include <soc/qcom/cmd-db.h>
-#include <linux/of_gpio.h>
 
 #include "main.h"
 #include "debug.h"
@@ -42,7 +42,7 @@ static struct cnss_clk_cfg cnss_clk_list[] = {
 #define BOOTSTRAP_GPIO			"qcom,enable-bootstrap-gpio"
 #define BOOTSTRAP_ACTIVE		"bootstrap_active"
 #define WLAN_EN_GPIO			"wlan-en-gpio"
-#define BT_EN_GPIO				"qcom,bt-en-gpio"
+#define BT_EN_GPIO			"qcom,bt-en-gpio"
 #define WLAN_EN_ACTIVE			"wlan_en_active"
 #define WLAN_EN_SLEEP			"wlan_en_sleep"
 
