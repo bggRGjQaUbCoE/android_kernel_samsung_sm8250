@@ -2576,9 +2576,6 @@ void task_dirty_inc(struct task_struct *tsk);
 #define VM_MIN_READAHEAD	16	/* kbytes (includes current page) */
 extern int mmap_readaround_limit;
 
-void force_page_cache_readahead(struct address_space *, struct file *,
-		pgoff_t index, unsigned long nr_to_read);
-
 void page_cache_sync_readahead(struct address_space *mapping,
 			       struct file_ra_state *ra,
 			       struct file *filp,
