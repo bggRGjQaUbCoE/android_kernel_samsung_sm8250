@@ -2637,21 +2637,13 @@ static int memdesc_sg_virt(struct kgsl_memdesc *memdesc, unsigned long useraddr)
 	}
 
 	down_read(&current->mm->mmap_sem);
-<<<<<<< HEAD
 	if (!check_vma(useraddr, memdesc->size)) {
-=======
-	if (!check_vma(memdesc->useraddr, memdesc->size)) {
->>>>>>> 593a07e0b (msm: kgsl: Don't allow re-importing memory owned by KGSL)
 		up_read(&current->mm->mmap_sem);
 		ret = -EFAULT;
 		goto out;
 	}
 
-<<<<<<< HEAD
 	npages = get_user_pages(useraddr, sglen, write, pages, NULL);
-=======
-	npages = get_user_pages(memdesc->useraddr, sglen, write, pages, NULL);
->>>>>>> 593a07e0b (msm: kgsl: Don't allow re-importing memory owned by KGSL)
 	up_read(&current->mm->mmap_sem);
 
 	ret = (npages < 0) ? (int)npages : 0;
@@ -2703,16 +2695,12 @@ static int kgsl_setup_anon_useraddr(struct kgsl_pagetable *pagetable,
 		entry->memdesc.gpuaddr = (uint64_t) hostptr;
 	}
 
-<<<<<<< HEAD
 	ret = memdesc_sg_virt(&entry->memdesc, hostptr);
 
 	if (ret && kgsl_memdesc_use_cpu_map(&entry->memdesc))
 		kgsl_mmu_put_gpuaddr(&entry->memdesc);
 
 	return ret;
-=======
-	return memdesc_sg_virt(&entry->memdesc);
->>>>>>> 593a07e0b (msm: kgsl: Don't allow re-importing memory owned by KGSL)
 }
 
 #ifdef CONFIG_DMA_SHARED_BUFFER
