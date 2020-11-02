@@ -31,6 +31,7 @@
 #include "gc.h"
 #include "trace.h"
 #include <trace/events/f2fs.h>
+#include <uapi/linux/f2fs.h>
 #include <trace/events/android_fs.h>
 
 #ifdef CONFIG_FSCRYPT_SDP
