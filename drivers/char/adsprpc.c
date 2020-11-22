@@ -2505,7 +2505,7 @@ static int fastrpc_init_process(struct fastrpc_file *fl,
 	struct fastrpc_channel_ctx *chan = &me->channel[cid];
 
 	if (chan->unsigned_support &&
-			fl->dev_minor == MINOR_NUM_DEV) {
+		fl->dev_minor == MINOR_NUM_DEV) {
 		/* Make sure third party applications */
 		/* can spawn only unsigned PD when */
 		/* channel configured as secure. */
@@ -4170,7 +4170,6 @@ static int fastrpc_get_info(struct fastrpc_file *fl, uint32_t *info)
 	err = fastrpc_set_process_info(fl);
 	if (err)
 		goto bail;
-
 	cid = *info;
 	if (fl->cid == -1) {
 		struct fastrpc_channel_ctx *chan = &me->channel[cid];
