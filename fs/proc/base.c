@@ -117,7 +117,6 @@
 #define GLOBAL_SYSTEM_GID KGIDT_INIT(1000)
 #endif
 
-
 struct task_kill_info {
 	struct task_struct *task;
 	struct work_struct work;
