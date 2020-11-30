@@ -17,7 +17,6 @@
 #include <linux/types.h>
 #include <linux/netfilter.h>
 #include <linux/module.h>
-#include <linux/sched.h>
 #include <linux/skbuff.h>
 #include <linux/proc_fs.h>
 #include <linux/vmalloc.h>
@@ -57,6 +56,8 @@
 #include <net/netns/hash.h>
 #ifdef CONFIG_KNOX_NCM
 // SEC_PRODUCT_FEATURE_KNOX_SUPPORT_NPA {
+
+#include <linux/sched.h>
 #include <net/ncm.h>
 // SEC_PRODUCT_FEATURE_KNOX_SUPPORT_NPA }
 #endif
@@ -1247,9 +1248,10 @@ static void gc_worker(struct work_struct *work)
 			if (nf_ct_is_expired(tmp)) {
 				nf_ct_gc_expired(tmp);
 				continue;
-#ifdef CONFIG_KNOX_NCM
+			} 
+			#ifdef CONFIG_KNOX_NCM
 			// SEC_PRODUCT_FEATURE_KNOX_SUPPORT_NPA {
-			} else if ( (tmp != NULL) && (check_ncm_flag()) && (check_intermediate_flag()) && (atomic_read(&tmp->startFlow)) && (atomic_read(&tmp->intermediateFlow)) ) {
+			else if ( (tmp != NULL) && (check_ncm_flag()) && (check_intermediate_flag()) && (atomic_read(&tmp->startFlow)) && (atomic_read(&tmp->intermediateFlow)) ) {
 				s32 npa_timeout = tmp->npa_timeout - ((u32)(jiffies));
 				if (npa_timeout <= 0) {
 					tmp->npa_timeout = ((u32)(jiffies)) + (get_intermediate_timeout() * HZ);
@@ -1258,6 +1260,7 @@ static void gc_worker(struct work_struct *work)
 #endif
 			}
 			// SEC_PRODUCT_FEATURE_KNOX_SUPPORT_NPA }
+			#endif
 
 			if (nf_conntrack_max95 == 0 || gc_worker_skip_ct(tmp))
 				continue;
