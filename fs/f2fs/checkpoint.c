@@ -10,15 +10,17 @@
 #include <linux/mpage.h>
 #include <linux/writeback.h>
 #include <linux/blkdev.h>
-#include <linux/kthread.h>
 #include <linux/f2fs_fs.h>
 #include <linux/pagevec.h>
 #include <linux/swap.h>
+#include <linux/kthread.h>
 
 #include "f2fs.h"
 #include "node.h"
 #include "segment.h"
 #include <trace/events/f2fs.h>
+
+#define DEFAULT_CHECKPOINT_IOPRIO (IOPRIO_PRIO_VALUE(IOPRIO_CLASS_BE, 3))
 
 static struct kmem_cache *ino_entry_slab;
 struct kmem_cache *f2fs_inode_entry_slab;
@@ -1779,65 +1781,94 @@ static void set_cmd_complete_time(struct checkpoint_cmd *cmd)
 }
 
 /* "cmd" can be null */
-static int __write_checkpoint_sync(struct f2fs_sb_info *sbi,
-		struct checkpoint_cmd *cmd, bool wait_lock)
+static int __write_checkpoint_sync(struct f2fs_sb_info *sbi)
 {
 	struct cp_control cpc = { .reason = CP_SYNC, };
 	int err;
 
-	if (!down_write_trylock(&sbi->gc_lock)) {
-		if (!wait_lock)
-			return -EBUSY;
-
-		down_write(&sbi->gc_lock);
-	}
-
-	set_cmd_start_time(cmd);
+	down_write(&sbi->gc_lock);
 	err = f2fs_write_checkpoint(sbi, &cpc);
-	set_cmd_complete_time(cmd);
 	up_write(&sbi->gc_lock);
 
 	return err;
 }
 
+static void __checkpoint_and_complete_reqs(struct f2fs_sb_info *sbi)
+{
+	struct ckpt_req_control *cprc = &sbi->cprc_info;
+	struct ckpt_req *req, *next;
+	struct llist_node *dispatch_list;
+	u64 sum_diff = 0, diff, count = 0;
+	int ret;
+
+	dispatch_list = llist_del_all(&cprc->issue_list);
+	if (!dispatch_list)
+		return;
+	dispatch_list = llist_reverse_order(dispatch_list);
+
+	ret = __write_checkpoint_sync(sbi);
+	atomic_inc(&cprc->issued_ckpt);
+
+	llist_for_each_entry_safe(req, next, dispatch_list, llnode) {
+		diff = (u64)ktime_ms_delta(ktime_get(), req->queue_time);
+		req->ret = ret;
+		complete(&req->wait);
+
+		sum_diff += diff;
+		count++;
+	}
+	atomic_sub(count, &cprc->queued_ckpt);
+	atomic_add(count, &cprc->total_ckpt);
+
+	spin_lock(&cprc->stat_lock);
+	cprc->cur_time = (unsigned int)div64_u64(sum_diff, count);
+	if (cprc->peak_time < cprc->cur_time)
+		cprc->peak_time = cprc->cur_time;
+	spin_unlock(&cprc->stat_lock);
+}
+
+
 static int issue_checkpoint_thread(void *data)
 {
 	struct f2fs_sb_info *sbi = data;
-	struct f2fs_ckpt_cmd_control *ccc = sbi->ccc_info;
-	wait_queue_head_t *q = &ccc->ckpt_wait_queue;
+	struct ckpt_req_control *cprc = &sbi->cprc_info;
+	wait_queue_head_t *q = &cprc->ckpt_wait_queue;
 repeat:
 	if (kthread_should_stop())
 		return 0;
 
 	sb_start_intwrite(sbi->sb);
 
-	if (!llist_empty(&ccc->issue_list)) {
-		struct checkpoint_cmd *cmd, *next;
-		int ret;
-
-		ccc->dispatch_list = llist_del_all(&ccc->issue_list);
-		ccc->dispatch_list = llist_reverse_order(ccc->dispatch_list);
-
-		cmd = llist_entry(ccc->dispatch_list, struct checkpoint_cmd, llnode);
-		set_cmd_dispatch_time(cmd);
-
-		ret = __write_checkpoint_sync(sbi, cmd, true);
-		atomic_inc(&ccc->issued_ckpt);
-
-		llist_for_each_entry_safe(cmd, next,
-					  ccc->dispatch_list, llnode) {
-			set_cmd_complete_time(cmd);
-			cmd->ret = ret;
-			complete(&cmd->wait);
-		}
-		ccc->dispatch_list = NULL;
-	}
+	if (!llist_empty(&cprc->issue_list))
+		__checkpoint_and_complete_reqs(sbi);
 
 	sb_end_intwrite(sbi->sb);
 
 	wait_event_interruptible(*q,
-		kthread_should_stop() || !llist_empty(&ccc->issue_list));
+		kthread_should_stop() || !llist_empty(&cprc->issue_list));
 	goto repeat;
+}
+
+static void flush_remained_ckpt_reqs(struct f2fs_sb_info *sbi,
+		struct ckpt_req *wait_req)
+{
+	struct ckpt_req_control *cprc = &sbi->cprc_info;
+
+	if (!llist_empty(&cprc->issue_list)) {
+		__checkpoint_and_complete_reqs(sbi);
+	} else {
+		/* already dispatched by issue_checkpoint_thread */
+		if (wait_req)
+			wait_for_completion(&wait_req->wait);
+	}
+}
+
+static void init_ckpt_req(struct ckpt_req *req)
+{
+	memset(req, 0, sizeof(struct ckpt_req));
+
+	init_completion(&req->wait);
+	req->queue_time = ktime_get();
 }
 
 static inline bool nice_cpu_sched(void)
@@ -1911,51 +1942,87 @@ int f2fs_set_issue_ckpt_ioprio(struct f2fs_sb_info *sbi, unsigned int ioprio)
 
 int f2fs_issue_checkpoint(struct f2fs_sb_info *sbi)
 {
-	struct f2fs_ckpt_cmd_control *ccc = sbi->ccc_info;
-	struct checkpoint_cmd cmd;
-	int ret;
+	struct ckpt_req_control *cprc = &sbi->cprc_info;
+	struct ckpt_req req;
+	struct cp_control cpc;
 
-	if (!ccc || !ccc->ckpt_task)
-		return __write_checkpoint_sync(sbi, NULL, true);
+	cpc.reason = __get_cp_reason(sbi);
+	if (!test_opt(sbi, MERGE_CHECKPOINT) || cpc.reason != CP_SYNC) {
+		int ret;
 
-	/* if current_task is first one that triggers checkpoint and if it has
-	 * enough cpu time for checkpointing, it tries checkpoint itself.
-	 * otherwise, a checkpoint should be offloaded to issue_checkpoint_thread.
-	 */
-	atomic_inc(&ccc->accum_ckpt);
-	if (atomic_inc_return(&ccc->issing_ckpt) == 1 && nice_cpu_sched()) {
-		/* if checkpoint is in progress by other context,
-		 * just queue checkpoint_cmd
-		 */
-		ret = __write_checkpoint_sync(sbi, NULL, false);
-		if (ret == -EBUSY)
-			goto queue_cmd;
+		down_write(&sbi->gc_lock);
+		ret = f2fs_write_checkpoint(sbi, &cpc);
+		up_write(&sbi->gc_lock);
 
-		atomic_dec(&ccc->issing_ckpt);
-		atomic_inc(&ccc->issued_ckpt);
 		return ret;
 	}
 
-queue_cmd:
-	init_checkpoint_cmd(&cmd);
+	if (!cprc->f2fs_issue_ckpt)
+		return __write_checkpoint_sync(sbi);
 
-	set_cmd_queue_time(&cmd);
-	llist_add(&cmd.llnode, &ccc->issue_list);
+	init_ckpt_req(&req);
+
+	llist_add(&req.llnode, &cprc->issue_list);
+	atomic_inc(&cprc->queued_ckpt);
 
 	/* update issue_list before we wake up issue_checkpoint thread */
 	smp_mb();
 
-	if (waitqueue_active(&ccc->ckpt_wait_queue))
-		wake_up(&ccc->ckpt_wait_queue);
+	if (waitqueue_active(&cprc->ckpt_wait_queue))
+		wake_up(&cprc->ckpt_wait_queue);
 
-	if (ccc->ckpt_task) {
-		wait_for_completion(&cmd.wait);
-		atomic_dec(&ccc->issing_ckpt);
-	} else {
-		flush_remained_checkpoint_cmd(sbi, &cmd);
+	if (cprc->f2fs_issue_ckpt)
+		wait_for_completion(&req.wait);
+	else
+		flush_remained_ckpt_reqs(sbi, &req);
+
+	return req.ret;
+}
+
+int f2fs_start_ckpt_thread(struct f2fs_sb_info *sbi)
+{
+	dev_t dev = sbi->sb->s_bdev->bd_dev;
+	struct ckpt_req_control *cprc = &sbi->cprc_info;
+
+	if (cprc->f2fs_issue_ckpt)
+		return 0;
+
+	cprc->f2fs_issue_ckpt = kthread_run(issue_checkpoint_thread, sbi,
+			"f2fs_ckpt-%u:%u", MAJOR(dev), MINOR(dev));
+	if (IS_ERR(cprc->f2fs_issue_ckpt)) {
+		cprc->f2fs_issue_ckpt = NULL;
+		return -ENOMEM;
 	}
 
-	return cmd.ret;
+	set_task_ioprio(cprc->f2fs_issue_ckpt, DEFAULT_CHECKPOINT_IOPRIO);
+
+	return 0;
+}
+
+void f2fs_stop_ckpt_thread(struct f2fs_sb_info *sbi)
+{
+	struct ckpt_req_control *cprc = &sbi->cprc_info;
+
+	if (cprc->f2fs_issue_ckpt) {
+		struct task_struct *ckpt_task = cprc->f2fs_issue_ckpt;
+
+		cprc->f2fs_issue_ckpt = NULL;
+		kthread_stop(ckpt_task);
+
+		flush_remained_ckpt_reqs(sbi, NULL);
+	}
+}
+
+void f2fs_init_ckpt_req_control(struct f2fs_sb_info *sbi)
+{
+	struct ckpt_req_control *cprc = &sbi->cprc_info;
+
+	atomic_set(&cprc->issued_ckpt, 0);
+	atomic_set(&cprc->total_ckpt, 0);
+	atomic_set(&cprc->queued_ckpt, 0);
+	init_waitqueue_head(&cprc->ckpt_wait_queue);
+	init_llist_head(&cprc->issue_list);
+	spin_lock_init(&cprc->stat_lock);
 }
 
 int f2fs_create_checkpoint_cmd_control(struct f2fs_sb_info *sbi)
