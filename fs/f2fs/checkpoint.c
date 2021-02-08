@@ -1946,8 +1946,6 @@ repeat:
 	if (kthread_should_stop())
 		return 0;
 
-	sb_start_intwrite(sbi->sb);
-
 	if (!llist_empty(&ccc->issue_list)) {
 		struct checkpoint_cmd *cmd, *next;
 		int ret;
@@ -1969,8 +1967,6 @@ repeat:
 		}
 		ccc->dispatch_list = NULL;
 	}
-
-	sb_end_intwrite(sbi->sb);
 
 	wait_event_interruptible(*q,
 		kthread_should_stop() || !llist_empty(&ccc->issue_list));
