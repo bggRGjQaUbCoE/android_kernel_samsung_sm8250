@@ -2096,7 +2096,11 @@ queue_cmd:
 	set_cmd_queue_time(&cmd);
 	llist_add(&cmd.llnode, &ccc->issue_list);
 
-	/* update issue_list before we wake up issue_checkpoint thread */
+	/*
+	 * update issue_list before we wake up issue_checkpoint thread,
+	 * this smp_mb() pairs with another barrier in ___wait_event(),
+	 * see more details in comments of waitqueue_active().
+	 */
 	smp_mb();
 
 	if (waitqueue_active(&ccc->ckpt_wait_queue))
