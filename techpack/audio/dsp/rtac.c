@@ -2072,5 +2072,3 @@ void rtac_exit(void)
 
 MODULE_DESCRIPTION("SoC QDSP6v2 Real-Time Audio Calibration driver");
 MODULE_LICENSE("GPL v2");
-
-
