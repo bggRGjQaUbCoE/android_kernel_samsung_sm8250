@@ -6545,7 +6545,10 @@ stune_util(int cpu, unsigned long other_util,
 	boosted_util = max(fps_util, boosted_util);
 #endif
 
-	return boosted_util;
+	if (sched_feat(SCHEDTUNE_BOOST_UTIL))
+		return boosted_util;
+	else
+		return util;
 }
 #endif
 
