@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-2.0-only
-/* Copyright (c) 2012-2020, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2012-2021, The Linux Foundation. All rights reserved.
  */
 
 #include <linux/slab.h>
@@ -1754,7 +1754,8 @@ static int diag_send_dci_pkt_remote(unsigned char *data, int len, int tag,
 		diagmem_free(driver, buf, dci_ops_tbl[token].mempool);
 		spin_unlock_irqrestore(&driver->dci_mempool_lock, flags);
 		return -EAGAIN;
-	}	
+
+	}
 	write_len += len;
 	*(buf + write_len) = CONTROL_CHAR; /* End Terminator */
 	write_len += sizeof(uint8_t);
