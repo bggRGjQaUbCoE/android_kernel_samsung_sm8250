@@ -1073,7 +1073,7 @@ void extract_dci_pkt_rsp(unsigned char *buf, int len, int data_source,
 		mutex_unlock(&driver->dci_mutex);
 		return;
 	}
-	
+
 	mutex_lock(&entry->buffers[data_source].buf_mutex);
 	rsp_buf = entry->buffers[data_source].buf_cmd;
 
