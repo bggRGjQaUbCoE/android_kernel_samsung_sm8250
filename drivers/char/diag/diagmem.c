@@ -171,8 +171,8 @@ void *diagmem_alloc(struct diagchar_dev *driver, int size, int pool_type)
 					   mempool->name);
 			break;
 		}
-		if (size == 0 || size > mempool->itemsize ||		
-			size > (int)mempool->pool->pool_data) {
+		if (size == 0 || size > mempool->itemsize ||
+			size > (uint64_t)mempool->pool->pool_data) {
 			pr_err_ratelimited("diag: cannot alloc from mempool %s, invalid size: %d\n",
 					   mempool->name, size);
 			break;
