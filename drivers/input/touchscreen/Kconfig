@@ -1325,7 +1325,7 @@ config TOUCHSCREEN_ST
 config TOUCHSCREEN_SYNAPTICS_DSX
 	bool "Synaptics DSX Touchscreen Driver"
 	depends on I2C
-	default y
+	default n
 	help
 	  Say Y here if you have a Synaptics Touchscreen.
 
@@ -1355,7 +1355,7 @@ source "drivers/input/touchscreen/stm/fts5cu56a/Kconfig"
 config TOUCHSCREEN_SYNAPTICS_TCM
 	bool "Synaptics TCM Touchscreen Driver"
 	depends on I2C
-	default y
+	default n
 	help
 	  Say Y here if you have a Synaptics Touchscreen.
 
