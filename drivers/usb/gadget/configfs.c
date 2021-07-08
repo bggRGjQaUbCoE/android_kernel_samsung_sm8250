@@ -1779,9 +1779,9 @@ static void android_gadget_complete(struct usb_ep *ep, struct usb_request *req)
 static int android_setup(struct usb_gadget *gadget,
 			const struct usb_ctrlrequest *c)
 {
-	struct usb_composite_dev *cdev = get_gadget_data(gadget);
+	struct usb_composite_dev *cdev;
 	unsigned long flags;
-	struct gadget_info *gi = container_of(cdev, struct gadget_info, cdev);
+	struct gadget_info *gi;
 	int value = -EOPNOTSUPP;
 	struct usb_function_instance *fi;
 #ifdef CONFIG_USB_ANDROID_SAMSUNG_COMPOSITE
@@ -1792,12 +1792,21 @@ static int android_setup(struct usb_gadget *gadget,
 	req->complete = android_gadget_complete;
 #endif
 
-	spin_lock_irqsave(&cdev->lock, flags);
+	if (!android_device)
+		return 0;
+
+	gi = dev_get_drvdata(android_device);
+	spin_lock_irqsave(&gi->spinlock, flags);
+	cdev = get_gadget_data(gadget);
+	if (!cdev || gi->unbind) {
+		spin_unlock_irqrestore(&gi->spinlock, flags);
+		return 0;
+	}
 	if (!gi->connected) {
 		gi->connected = 1;
 		schedule_work(&gi->work);
 	}
-	spin_unlock_irqrestore(&cdev->lock, flags);
+
 #ifdef CONFIG_USB_ANDROID_SAMSUNG_COMPOSITE
 	list_for_each_entry(configuration, &cdev->configs, list) {
 		list_for_each_entry(f, &configuration->functions, list) {
@@ -1809,6 +1818,7 @@ static int android_setup(struct usb_gadget *gadget,
 		}
 	}
 #endif
+
 	list_for_each_entry(fi, &gi->available_func, cfs_list) {
 		if (fi != NULL && fi->f != NULL && fi->f->setup != NULL
 		    && fi->f->config != NULL) {
@@ -1842,18 +1852,17 @@ static int android_setup(struct usb_gadget *gadget,
 	if (value < 0)
 		value = composite_setup(gadget, c);
 
-	spin_lock_irqsave(&cdev->lock, flags);
-
 #ifdef CONFIG_USB_ANDROID_SAMSUNG_COMPOSITE
 	if (c->bRequest == USB_REQ_SET_CONFIGURATION &&
 			cdev->mute_switch == true)
 		cdev->mute_switch = false;
 #endif
+
 	if (c->bRequest == USB_REQ_SET_CONFIGURATION &&
 						cdev->config) {
 		schedule_work(&gi->work);
 	}
-	spin_unlock_irqrestore(&cdev->lock, flags);
+	spin_unlock_irqrestore(&gi->spinlock, flags);
 
 	return value;
 }
