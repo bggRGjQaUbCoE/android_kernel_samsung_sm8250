@@ -920,6 +920,9 @@ config TIERS_PER_GEN
 	  Larger values generally offer better protection to active pages under
 	  heavy buffered I/O workloads.
 # }
+
+source "mm/damon/Kconfig"
+
 endmenu
 
 config PROCESS_RECLAIM
