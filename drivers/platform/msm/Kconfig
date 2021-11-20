@@ -87,6 +87,12 @@ config IPA3
 	  Kernel and user-space processes can call the IPA driver
 	  to configure IPA core.
 
+config DISABLE_IPA_WAKELOCKS
+	tristate "Disable IPA_V2 Wakelocks"
+	depends on IPA
+	help
+	  Disables the wakelocks created by ipa driver in order to save power
+
 config IPA_DEBUG
 	bool "IPA DEBUG for non-perf build"
 	depends on IPA3
