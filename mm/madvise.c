@@ -793,25 +793,6 @@ next:
 	return 0;
 }
 
-<<<<<<< HEAD
-=======
-static void madvise_free_page_range(struct mmu_gather *tlb,
-			     struct vm_area_struct *vma,
-			     unsigned long addr, unsigned long end)
-{
-	struct mm_walk free_walk = {
-		.pmd_entry = madvise_free_pte_range,
-		.mm = vma->vm_mm,
-		.private = tlb,
-	};
-
-	vm_write_begin(vma);
-	tlb_start_vma(tlb, vma);
-	walk_page_range(addr, end, &free_walk);
-	tlb_end_vma(tlb, vma);
-	vm_write_end(vma);
-}
->>>>>>> 6242ff29cccb (pagewalk: separate function pointers from iterator data)
 static const struct mm_walk_ops madvise_free_walk_ops = {
 	.pmd_entry		= madvise_free_pte_range,
 };
@@ -839,13 +820,13 @@ static int madvise_free_single_vma(struct vm_area_struct *vma,
 	update_hiwater_rss(mm);
 
 	mmu_notifier_invalidate_range_start(mm, start, end);
-<<<<<<< HEAD
-=======
 	tlb_start_vma(&tlb, vma);
-	walk_page_range(vma->vm_mm, range.start, range.end,
+	walk_page_range(vma->vm_mm, start, end,
 			&madvise_free_walk_ops, &tlb);
-	tlb_end_vma(&tlb, vma);
->>>>>>> 6242ff29cccb (pagewalk: separate function pointers from iterator data)
+	do {
+		if (!tlb.fullmm)
+			tlb_flush_mmu_tlbonly(&tlb);
+	} while (0);
 	mmu_notifier_invalidate_range_end(mm, start, end);
 	tlb_finish_mmu(&tlb, start, end);
 
