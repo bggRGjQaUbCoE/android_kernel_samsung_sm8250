@@ -45,6 +45,16 @@ enum {
 	ATGC_INFO,	/* struct atgc_management */
 };
 
+static const char *gc_mode_names[MAX_GC_MODE] = {
+	"GC_NORMAL",
+	"GC_IDLE_CB",
+	"GC_IDLE_GREEDY",
+	"GC_IDLE_AT",
+	"GC_URGENT_HIGH",
+	"GC_URGENT_LOW",
+	"GC_URGENT_MID"
+};
+
 #ifdef CONFIG_F2FS_SEC_BLOCK_OPERATIONS_DEBUG
 const char *sec_blkops_dbg_type_names[NR_F2FS_SEC_DBG_ENTRY] = {
 	"DENTS",
@@ -789,8 +799,13 @@ static ssize_t f2fs_sbi_show(struct f2fs_attr *a,
 						sbi->compr_new_inode);
 #endif
 
+	if (!strcmp(a->attr.name, "gc_urgent"))
+		return snprintf(buf, PAGE_SIZE, "%s\n",
+				gc_mode_names[sbi->gc_mode]);
+
 	if (!strcmp(a->attr.name, "gc_segment_mode"))
-		return snprintf(buf, PAGE_SIZE, "%u\n", sbi->gc_segment_mode);
+		return snprintf(buf, PAGE_SIZE, "%s\n",
+				gc_mode_names[sbi->gc_segment_mode]);
 
 	if (!strcmp(a->attr.name, "gc_reclaimed_segments")) {
 		return snprintf(buf, PAGE_SIZE, "%u\n",
