@@ -1220,6 +1220,9 @@ static int move_data_block(struct inode *inode, block_t bidx,
 		/* W/A for GC failure due to Pinned File */
 		set_bit(GET_SEC_FROM_SEG(F2FS_I_SB(inode), segno),
 			DIRTY_I(F2FS_I_SB(inode))->blacklist_victim_secmap);
+
+		if (gc_type == FG_GC)
+			f2fs_pin_file_control(inode, true);
 		err = -EAGAIN;
 		goto out;
 	}
@@ -1864,13 +1867,9 @@ stop:
 				reserved_segments(sbi),
 				prefree_segments(sbi));
 
-<<<<<<< HEAD
 	sbi->sec_stat.gc_count[gc_type]++;
 	f2fs_update_gc_total_time(sbi, gc_start_time, gc_end_time, gc_type);
-	up_write(&sbi->gc_lock);
-=======
 	f2fs_up_write(&sbi->gc_lock);
->>>>>>> 896c22c16f28 (f2fs: move f2fs to use reader-unfair rwsems)
 
 	put_gc_inode(&gc_list);
 
