@@ -1216,6 +1216,9 @@ static int move_data_block(struct inode *inode, block_t bidx,
 		/* W/A for GC failure due to Pinned File */
 		set_bit(GET_SEC_FROM_SEG(F2FS_I_SB(inode), segno),
 			DIRTY_I(F2FS_I_SB(inode))->blacklist_victim_secmap);
+
+		if (gc_type == FG_GC)
+			f2fs_pin_file_control(inode, true);
 		err = -EAGAIN;
 		goto out;
 	}
