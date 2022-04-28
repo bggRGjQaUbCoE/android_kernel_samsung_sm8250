@@ -1425,9 +1425,6 @@ static struct inode *f2fs_alloc_inode(struct super_block *sb)
 	spin_lock_init(&fi->i_size_lock);
 	INIT_LIST_HEAD(&fi->dirty_list);
 	INIT_LIST_HEAD(&fi->gdirty_list);
-	INIT_LIST_HEAD(&fi->inmem_ilist);
-	INIT_LIST_HEAD(&fi->inmem_pages);
-	mutex_init(&fi->inmem_lock);
 	init_f2fs_rwsem(&fi->i_gc_rwsem[READ]);
 	init_f2fs_rwsem(&fi->i_gc_rwsem[WRITE]);
 	init_f2fs_rwsem(&fi->i_mmap_sem);
@@ -1471,9 +1468,8 @@ static int f2fs_drop_inode(struct inode *inode)
 			atomic_inc(&inode->i_count);
 			spin_unlock(&inode->i_lock);
 
-			/* some remained atomic pages should discarded */
 			if (f2fs_is_atomic_file(inode))
-				f2fs_drop_inmem_pages(inode);
+				f2fs_abort_atomic_write(inode, true);
 
 			/* should remain fi->extent_tree for writepage */
 			f2fs_destroy_extent_node(inode);
@@ -2215,12 +2211,8 @@ static int f2fs_disable_checkpoint(struct f2fs_sb_info *sbi)
 	sbi->gc_mode = GC_URGENT_HIGH;
 
 	while (!f2fs_time_over(sbi, DISABLE_TIME)) {
-<<<<<<< HEAD
 		retry_cnt++;
-		down_write(&sbi->gc_lock);
-=======
 		f2fs_down_write(&sbi->gc_lock);
->>>>>>> 896c22c16f28 (f2fs: move f2fs to use reader-unfair rwsems)
 		err = f2fs_gc(sbi, true, false, false, NULL_SEGNO);
 		if (err == -ENODATA) {
 			err = 0;
@@ -3802,16 +3794,11 @@ static void init_sb_info(struct f2fs_sb_info *sbi)
 	sbi->dirty_device = 0;
 	spin_lock_init(&sbi->dev_lock);
 
-<<<<<<< HEAD
 	/* FUA Mode : ROOT & Quota */
 	sbi->s_sec_cond_fua_mode = F2FS_SEC_FUA_ROOT;
 
-	init_rwsem(&sbi->sb_lock);
-	init_rwsem(&sbi->pin_sem);
-=======
 	init_f2fs_rwsem(&sbi->sb_lock);
 	init_f2fs_rwsem(&sbi->pin_sem);
->>>>>>> 896c22c16f28 (f2fs: move f2fs to use reader-unfair rwsems)
 }
 
 static int init_percpu_info(struct f2fs_sb_info *sbi)
