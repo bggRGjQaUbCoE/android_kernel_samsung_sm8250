@@ -384,7 +384,7 @@ static const struct kernel_param_ops enabled_param_ops = {
 
 module_param_cb(enabled, &enabled_param_ops, &enabled, 0600);
 MODULE_PARM_DESC(enabled,
-        "Enable or disable DAMON_RECLAIM (default: disabled)");
+	"Enable or disable DAMON_RECLAIM (default: disabled)");
 
 static int damon_reclaim_after_aggregation(struct damon_ctx *c)
 {
