@@ -127,7 +127,8 @@ static __always_inline void csd_lock(struct __call_single_data *csd)
 
 static __always_inline void csd_unlock(struct __call_single_data *csd)
 {
-	WARN_ON(!(csd->flags & CSD_FLAG_LOCK));
+	if (!(csd->flags & CSD_FLAG_LOCK))
+		return;
 
 	/*
 	 * ensure we're all done before releasing data:
