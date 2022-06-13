@@ -13,3 +13,5 @@ optimize those.
 
    start
    usage
+   reclaim
+   lru_sort
