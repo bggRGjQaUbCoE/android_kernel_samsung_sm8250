@@ -192,6 +192,91 @@ bool f2fs_need_SSR(struct f2fs_sb_info *sbi)
 			SM_I(sbi)->min_ssr_sections + reserved_sections(sbi));
 }
 
+void f2fs_abort_atomic_write(struct inode *inode, bool clean)
+{
+	struct f2fs_sb_info *sbi = F2FS_I_SB(inode);
+	struct f2fs_inode_info *fi = F2FS_I(inode);
+
+	if (f2fs_is_atomic_file(inode)) {
+		if (clean)
+			truncate_inode_pages_final(inode->i_mapping);
+		clear_inode_flag(fi->cow_inode, FI_ATOMIC_FILE);
+		iput(fi->cow_inode);
+		fi->cow_inode = NULL;
+		release_atomic_write_cnt(inode);
+		clear_inode_flag(inode, FI_ATOMIC_FILE);
+
+		spin_lock(&sbi->inode_lock[ATOMIC_FILE]);
+		sbi->atomic_files--;
+		spin_unlock(&sbi->inode_lock[ATOMIC_FILE]);
+	}
+}
+
+static int __replace_atomic_write_block(struct inode *inode, pgoff_t index,
+			block_t new_addr, block_t *old_addr, bool recover)
+{
+	struct f2fs_sb_info *sbi = F2FS_I_SB(inode);
+	struct dnode_of_data dn;
+	struct node_info ni;
+	int err;
+
+retry:
+	set_new_dnode(&dn, inode, NULL, NULL, 0);
+	err = f2fs_get_dnode_of_data(&dn, index, LOOKUP_NODE_RA);
+	if (err) {
+		if (err == -ENOMEM) {
+			f2fs_io_schedule_timeout(DEFAULT_IO_TIMEOUT);
+			goto retry;
+		}
+		return err;
+	}
+
+	err = f2fs_get_node_info(sbi, dn.nid, &ni, false);
+	if (err) {
+		f2fs_put_dnode(&dn);
+		return err;
+	}
+
+	if (recover) {
+		/* dn.data_blkaddr is always valid */
+		if (!__is_valid_data_blkaddr(new_addr)) {
+			if (new_addr == NULL_ADDR)
+				dec_valid_block_count(sbi, inode, 1);
+			f2fs_invalidate_blocks(sbi, dn.data_blkaddr);
+			f2fs_update_data_blkaddr(&dn, new_addr);
+		} else {
+			f2fs_replace_block(sbi, &dn, dn.data_blkaddr,
+				new_addr, ni.version, true, true);
+		}
+	} else {
+		blkcnt_t count = 1;
+
+		*old_addr = dn.data_blkaddr;
+		f2fs_truncate_data_blocks_range(&dn, 1);
+		dec_valid_block_count(sbi, F2FS_I(inode)->cow_inode, count);
+		inc_valid_block_count(sbi, inode, &count);
+		f2fs_replace_block(sbi, &dn, dn.data_blkaddr, new_addr,
+					ni.version, true, false);
+	}
+
+	f2fs_put_dnode(&dn);
+	return 0;
+}
+
+static void __complete_revoke_list(struct inode *inode, struct list_head *head,
+					bool revoke)
+{
+	struct revoke_entry *cur, *tmp;
+
+	list_for_each_entry_safe(cur, tmp, head, list) {
+		if (revoke)
+			__replace_atomic_write_block(inode, cur->index,
+						cur->old_addr, NULL, true);
+		list_del(&cur->list);
+		kmem_cache_free(revoke_entry_slab, cur);
+	}
+}
+
 static int __f2fs_commit_atomic_write(struct inode *inode)
 {
 	struct f2fs_sb_info *sbi = F2FS_I_SB(inode);
@@ -258,6 +343,11 @@ next:
 	}
 
 out:
+	if (ret)
+		sbi->revoked_atomic_block += fi->atomic_write_cnt;
+	else
+		sbi->committed_atomic_block += fi->atomic_write_cnt;
+
 	__complete_revoke_list(inode, &revoke_list, ret ? true : false);
 
 	return ret;
