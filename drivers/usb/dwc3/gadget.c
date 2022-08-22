@@ -381,6 +381,9 @@ void dwc3_gadget_giveback(struct dwc3_ep *dep, struct dwc3_request *req,
 
 	dwc3_gadget_del_and_unmap_request(dep, req, status);
 
+	if (!dep->endpoint.desc)
+		return;
+
 #ifdef CONFIG_USB_ANDROID_SAMSUNG_COMPOSITE
 	if (req->request.complete) {
 		spin_unlock(&dwc->lock);
