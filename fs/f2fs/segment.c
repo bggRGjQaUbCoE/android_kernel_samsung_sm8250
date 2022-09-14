@@ -484,7 +484,7 @@ do_sync:
 
 		sbi->sec_stat.cp_cnt[STAT_CP_BG]++;
 		blk_start_plug(&plug);
-		f2fs_sync_dirty_inodes(sbi, FILE_INODE);
+		f2fs_sync_dirty_inodes(sbi, FILE_INODE, false);
 		blk_finish_plug(&plug);
 
 		mutex_unlock(&sbi->flush_lock);
