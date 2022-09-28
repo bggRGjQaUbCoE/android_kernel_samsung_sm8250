@@ -342,7 +342,8 @@ static void f2fs_write_end_io(struct bio *bio)
 			mempool_free(page, sbi->write_io_dummy);
 
 			if (unlikely(bio->bi_status))
-				f2fs_stop_checkpoint(sbi, true);
+				f2fs_stop_checkpoint(sbi, true,
+						STOP_CP_REASON_WRITE_FAIL);
 			continue;
 		}
 
@@ -364,7 +365,8 @@ static void f2fs_write_end_io(struct bio *bio)
 							fscrypt_dd_get_ino(bio));
 				}
 #endif
-				f2fs_stop_checkpoint(sbi, true);
+				f2fs_stop_checkpoint(sbi, true,
+						STOP_CP_REASON_WRITE_FAIL);
 				f2fs_bug_on_endio(sbi, 1);
 			}
 		}
