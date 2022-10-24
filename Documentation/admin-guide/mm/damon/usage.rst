@@ -444,8 +444,9 @@ workloads and therefore want to set optimal initial regions for the 'adaptive
 regions adjustment'.
 
 In such cases, users can explicitly set the initial monitoring target regions
-as they want, by writing proper values to the ``init_regions`` file.  Each line
-of the input should represent one region in below form.::
+as they want, by writing proper values to the ``init_regions`` file.  The input
+should be a sequence of three integers separated by white spaces that represent
+one region in below form.::
 
     <target id> <start address> <end address>
 
@@ -456,10 +457,12 @@ region of process 42, and another couple of address ranges, ``20-40`` and
 ``50-100`` as that of process 4242.::
 
     # cd <debugfs>/damon
-    # echo "42   1       100
-            42   100     200
-            4242 20      40
-            4242 50      100" > init_regions
+    # cat target_ids
+    42 4242
+    # echo "0   1       100 \
+            0   100     200 \
+            1   20      40  \
+            1   50      100" > init_regions
 
 Note that this sets the initial monitoring target regions only.  In case of
 virtual memory monitoring, DAMON will automatically updates the boundary of the
