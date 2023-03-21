@@ -599,6 +599,10 @@ static inline bool has_curseg_enough_space(struct f2fs_sb_info *sbi,
 	return true;
 }
 
+/*
+ * calculate needed sections for dirty node/dentry
+ * and call has_curseg_enough_space
+ */
 static inline void __get_secs_required(struct f2fs_sb_info *sbi,
 		unsigned int *lower_p, unsigned int *upper_p, bool *curseg_p)
 {
@@ -647,6 +651,7 @@ static inline bool has_enough_free_secs(struct f2fs_sb_info *sbi,
 					int freed, int needed)
 {
 	return !has_not_enough_free_secs(sbi, freed, needed);
+
 }
 
 static inline bool f2fs_is_checkpoint_ready(struct f2fs_sb_info *sbi)
