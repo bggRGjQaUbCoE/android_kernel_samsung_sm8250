@@ -4616,9 +4616,6 @@ static void lru_gen_age_node(struct pglist_data *pgdat, struct scan_control *sc)
 	 */
 	pr_err("mglru: min_ttl unsatisfied, calling OOM killer\n");
 	lru_gen_min_ttl_unsatisfied++;
-#ifdef CONFIG_ANDROID_SIMPLE_LMK
-	simple_lmk_trigger();
-#else
 	if (mutex_trylock(&oom_lock)) {
 		struct oom_control oc = {
 			.gfp_mask = sc->gfp_mask,
@@ -4628,7 +4625,6 @@ static void lru_gen_age_node(struct pglist_data *pgdat, struct scan_control *sc)
 
 		mutex_unlock(&oom_lock);
 	}
-#endif
 }
 
 /*
