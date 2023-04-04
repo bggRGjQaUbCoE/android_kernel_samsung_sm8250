@@ -289,7 +289,6 @@ enum dirty_type {
 };
 
 struct dirty_seglist_info {
-	const struct victim_selection *v_ops;	/* victim selction operation */
 	unsigned long *dirty_segmap[NR_DIRTY_TYPE];
 	unsigned long *dirty_secmap;
 	struct mutex seglist_lock;		/* lock for segment bitmaps */
@@ -301,12 +300,6 @@ struct dirty_seglist_info {
 
 	/* W/A for FG_GC failure due to Atomic Write File and Pinned File */
 	unsigned long *blacklist_victim_secmap; /* GC Failed Bitmap */ 
-};
-
-/* victim selection function for cleaning and SSR */
-struct victim_selection {
-	int (*get_victim)(struct f2fs_sb_info *, unsigned int *,
-					int, int, char, unsigned long long);
 };
 
 /* for active log information */
