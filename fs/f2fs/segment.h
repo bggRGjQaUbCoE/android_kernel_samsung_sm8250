@@ -651,7 +651,6 @@ static inline bool has_enough_free_secs(struct f2fs_sb_info *sbi,
 					int freed, int needed)
 {
 	return !has_not_enough_free_secs(sbi, freed, needed);
-
 }
 
 static inline bool f2fs_is_checkpoint_ready(struct f2fs_sb_info *sbi)
