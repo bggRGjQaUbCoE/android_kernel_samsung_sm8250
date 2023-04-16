@@ -1116,12 +1116,7 @@ EXPORT_SYMBOL_GPL(ip6_dst_lookup);
  *	It returns a valid dst pointer on success, or a pointer encoded
  *	error code.
  */
-<<<<<<< HEAD
 struct dst_entry *ip6_dst_lookup_flow(struct net *net, const struct sock *sk, struct flowi6 *fl6,
-=======
-struct dst_entry *ip6_dst_lookup_flow(struct net *net, const struct sock *sk,
-				      struct flowi6 *fl6,
->>>>>>> 6328392d637c (UPSTREAM: net: ipv6: add net argument to ip6_dst_lookup_flow)
 				      const struct in6_addr *final_dst)
 {
 	struct dst_entry *dst = NULL;

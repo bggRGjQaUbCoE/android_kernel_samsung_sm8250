@@ -58,8 +58,11 @@
 		desc			;	\
 	ELFNOTE_END
 
+#define ELFNOTE_LINUX(desc)			\
+	ELFNOTE(Linux, 0, desc)
+
 #else	/* !__ASSEMBLER__ */
-#include <uapi/linux/elf.h>
+#include <linux/elf.h>
 /*
  * Use an anonymous structure which matches the shape of
  * Elf{32,64}_Nhdr, but includes the name and desc data.  The size and
@@ -94,6 +97,11 @@
 
 #define ELFNOTE32(name, type, desc) ELFNOTE(32, name, type, desc)
 #define ELFNOTE64(name, type, desc) ELFNOTE(64, name, type, desc)
+
+#define ELFNOTE32_LINUX(desc)			\
+	ELFNOTE32("Linux", 0, desc)
+#define ELFNOTE64_LINUX(desc)			\
+	ELFNOTE64("Linux", 0, desc)
 #endif	/* __ASSEMBLER__ */
 
 #endif /* _LINUX_ELFNOTE_H */

@@ -108,6 +108,8 @@
 
 #define __optimize(level)	__attribute__((__optimize__(level)))
 
+#define __compiletime_object_size(obj) __builtin_object_size(obj, 0)
+
 #ifndef __CHECKER__
 #define __compiletime_warning(message) __attribute__((warning(message)))
 #define __compiletime_error(message) __attribute__((error(message)))
@@ -244,11 +246,6 @@
 
 #if !defined(__no_sanitize_address)
 #define __no_sanitize_address
-#endif
-
-#if __GNUC__ >= 5
-/* Avoid reordering a top level statement */
-#define __noreorder    __attribute__((no_reorder))
 #endif
 
 /*
