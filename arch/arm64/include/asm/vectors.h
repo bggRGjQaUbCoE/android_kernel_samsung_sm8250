@@ -9,6 +9,7 @@
 #include <linux/percpu.h>
 
 #include <asm/fixmap.h>
+#include <asm/mmu.h>
 
 extern char vectors[];
 extern char tramp_vectors[];
@@ -47,6 +48,8 @@ enum arm64_bp_harden_el1_vectors {
 };
 
 #ifndef CONFIG_MITIGATE_SPECTRE_BRANCH_HISTORY
+#define EL1_VECTOR_BHB_LOOP		-1
+#define EL1_VECTOR_BHB_FW		-1
 #define EL1_VECTOR_BHB_CLEAR_INSN	-1
 #endif /* !CONFIG_MITIGATE_SPECTRE_BRANCH_HISTORY */
 
