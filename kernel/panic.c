@@ -201,7 +201,7 @@ void panic(const char *fmt, ...)
 
 	sec_debug_store_extc_idx(false);
 	/*To prevent watchdog reset during panic handling. */
-	emerg_pet_watchdog();
+	//emerg_pet_watchdog();
 
 	if (panic_on_warn) {
 		/*

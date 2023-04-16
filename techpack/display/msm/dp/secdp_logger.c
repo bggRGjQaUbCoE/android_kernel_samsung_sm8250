@@ -19,7 +19,7 @@
 #include <linux/time.h>
 #include <linux/uaccess.h>
 #include <linux/sched/clock.h>
-#include <linux/secdp_logger.h>
+//#include <linux/secdp_logger.h>
 
 #include "secdp_unit_test.h"
 
@@ -50,7 +50,7 @@ void dp_logger_print_date_time(void)
 		tm.tm_mon + 1, tm.tm_mday, tm.tm_hour, tm.tm_min, tm.tm_sec,
 		nsec / 1000000);
 
-	secdp_logger_print("%s\n", tmp);
+	//secdp_logger_print("%s\n", tmp);
 }
 
 /* set max log count, if count is -1, no limit */
@@ -120,7 +120,7 @@ void secdp_logger_hex_dump(void *buf, void *pref, size_t size)
 		len = snprintf(ptmp, 4, "%02x ", *ptr++);
 		ptmp = ptmp + len;
 		if (((i+1)%16) == 0) {
-			secdp_logger_print("%s%s\n", pref, tmp);
+			//secdp_logger_print("%s%s\n", pref, tmp);
 			ptmp = tmp;
 		}
 	}
@@ -128,7 +128,7 @@ void secdp_logger_hex_dump(void *buf, void *pref, size_t size)
 	len = i % 16;
 	if (len != 0) {
 		tmp[len] = 0x0;
-		secdp_logger_print("%s\n", tmp);
+		//secdp_logger_print("%s\n", tmp);
 	}
 }
 
@@ -181,7 +181,7 @@ int secdp_logger_init(void)
 
 	proc_set_size(entry, BUF_SIZE);
 	is_secdp_logger_init = 1;
-	secdp_logger_print("dp logger init ok\n");
+	//secdp_logger_print("dp logger init ok\n");
 
 	return 0;
 }

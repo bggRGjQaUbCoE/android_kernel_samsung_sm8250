@@ -104,8 +104,6 @@ static int rmnet_data_pm_change_rps_map(struct netdev_rx_queue *queue,
 	int err, cpu, i;
 	static DEFINE_MUTEX(rps_map_mutex);
 
-	pr_debug("rmnet_data_pm_change_rps_map %s %d\n", buf, len);
-
 	if (!alloc_cpumask_var(&mask, GFP_KERNEL)){
 		pr_err("%s alloc_cpumask_var fail\n", __func__);
 		return -ENOMEM;
@@ -349,18 +347,18 @@ static int rmnet_data_dev_cb(struct notifier_block *nb,
 		/* Set initial value */
 		rmnet_data_pm_argos_cb(NULL, 0, NULL);
 
-		ret = sec_argos_register_notifier(&rmnet_data_argos_nb, MIF_ARGOS_IPC_LABEL);
-		if (ret)
-			pr_err("Fail to register rmnet_data pm argos notifier block\n");
+		//ret = sec_argos_register_notifier(&rmnet_data_argos_nb, MIF_ARGOS_IPC_LABEL);
+		//if (ret)
+			//pr_err("Fail to register rmnet_data pm argos notifier block\n");
 		break;
 	case NETDEV_UNREGISTER:
 		if (!cfg)
 			break;
 
 		pr_info("Reset rmnet_data_pm_argos configure\n");
-		ret = sec_argos_unregister_notifier(&rmnet_data_argos_nb, MIF_ARGOS_IPC_LABEL);
-		if (ret)
-			pr_err("Fail to unregister rmnet_data pm argos notifier block\n");
+		//ret = sec_argos_unregister_notifier(&rmnet_data_argos_nb, MIF_ARGOS_IPC_LABEL);
+		//if (ret)
+			//pr_err("Fail to unregister rmnet_data pm argos notifier block\n");
 
 		kfree(cfg);
 		cfg = NULL;
