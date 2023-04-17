@@ -635,7 +635,7 @@ int sde_plane_wait_input_fence(struct drm_plane *plane, uint32_t wait_ms)
 						PLANE_PROP_INPUT_FENCE));
 				psde->is_error = true;
 				sde_kms_timeline_status(plane->dev);
-#if defined(CONFIG_DISPLAY_SAMSUNG)
+#ifdef CONFIG_SEC_DEBUG
 				{
 					struct dma_fence *tout_fence = input_fence;
 

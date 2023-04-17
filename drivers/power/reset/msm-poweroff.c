@@ -561,7 +561,7 @@ static void msm_restart_prepare(const char *cmd)
 			__raw_writel(0x7766550a, restart_reason);
 		} else if (!strncmp(cmd, "cross_fail", 10)) {
 			qpnp_pon_set_restart_reason(
-				PON_RESTART_REASON_CROSS_FAIL);
+				0X2C);
 			__raw_writel(0x7766550c, restart_reason);
 #ifdef CONFIG_SEC_PERIPHERAL_SECURE_CHK
 		} else if (!strcmp(cmd, "peripheral_hw_reset")) {
@@ -583,7 +583,7 @@ static void msm_restart_prepare(const char *cmd)
 #endif
 #if defined(CONFIG_SEC_ABC)
 		} else if (!strncmp(cmd, "user_dram_test", 14) && sec_abc_get_enabled()) {
-			qpnp_pon_set_restart_reason(PON_RESTART_REASON_USER_DRAM_TEST);
+			qpnp_pon_set_restart_reason(0x40);
 #endif
 		} else {
 			__raw_writel(0x77665501, restart_reason);
