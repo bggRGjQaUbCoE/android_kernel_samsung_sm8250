@@ -34,7 +34,7 @@
 #include <linux/page_counter.h>
 #include <linux/memcontrol.h>
 #include <linux/cgroup.h>
-#include <linux/mm.h>
+#include <linux/pagewalk.h>
 #include <linux/sched/mm.h>
 #include <linux/shmem_fs.h>
 #include <linux/hugetlb.h>
@@ -207,11 +207,7 @@ static struct move_charge_struct {
  * Maximum loops in mem_cgroup_hierarchical_reclaim(), used for soft
  * limit reclaim to prevent infinite loops, if they ever occur.
  */
-#ifdef CONFIG_MEMCG_HEIMDALL
-#define	MEM_CGROUP_MAX_RECLAIM_LOOPS		10
-#else
 #define	MEM_CGROUP_MAX_RECLAIM_LOOPS		100
-#endif
 #define	MEM_CGROUP_MAX_SOFT_LIMIT_RECLAIM_LOOPS	2
 
 enum charge_type {
@@ -2857,11 +2853,6 @@ unsigned long mem_cgroup_soft_limit_reclaim(pg_data_t *pgdat, int order,
 	if (order > 0)
 		return 0;
 
-#ifdef CONFIG_MEMCG_HEIMDALL
-	if (!current_is_kswapd())
-		return 0;
-#endif
-
 	mctz = soft_limit_tree_node(pgdat->node_id);
 
 	/*
@@ -3058,42 +3049,6 @@ static void accumulate_memcg_tree(struct mem_cgroup *memcg,
 	}
 }
 
-#ifdef CONFIG_MEMCG_HEIMDALL
-static ssize_t mem_cgroup_force_shrink_write(struct kernfs_open_file *of,
-					    char *buf, size_t nbytes,
-					    loff_t off)
-{
-	int type;
-	unsigned long size;
-	char *str;
-	int ret = -EINVAL;
-	struct mem_cgroup *memcg = mem_cgroup_from_css(of_css(of));
-
-	if (mem_cgroup_is_root(memcg))
-		goto error;
-
-	buf = strstrip(buf);
-	str = strchr(buf, ',');
-	if (str == NULL)
-		goto error;
-
-	*str = '\0';
-	ret = kstrtoul(str+1, 10, &size);
-	if (ret)
-		goto error;
-
-	ret = kstrtoint(buf, 10, &type);
-	if (ret)
-		goto error;
-
-	if (type > 0 && type <= MEMCG_HEIMDALL_SHRINK_FILE)
-		forced_shrink_node_memcg(NODE_DATA(0), memcg, type, size / PAGE_SIZE);
-
-error:
-	return ret ?: nbytes;
-}
-#endif
-
 static unsigned long mem_cgroup_usage(struct mem_cgroup *memcg, bool swap)
 {
 	unsigned long val = 0;
@@ -3108,16 +3063,10 @@ static unsigned long mem_cgroup_usage(struct mem_cgroup *memcg, bool swap)
 				val += memcg_page_state(iter, MEMCG_SWAP);
 		}
 	} else {
-#ifdef CONFIG_MEMCG_HEIMDALL
-		val = memcg_page_state(memcg, MEMCG_RSS);
-		if (swap)
-			val += memcg_page_state(memcg, MEMCG_SWAP);
-#else
 		if (!swap)
 			val = page_counter_read(&memcg->memory);
 		else
 			val = page_counter_read(&memcg->memsw);
-#endif
 	}
 	return val;
 }
@@ -3588,17 +3537,7 @@ static int memcg_stat_show(struct seq_file *m, void *v)
 
 	return 0;
 }
-static u64 mem_cgroup_vmpressure_read(struct cgroup_subsys_state *css,
-				      struct cftype *cft)
-{
-	struct mem_cgroup *memcg = mem_cgroup_from_css(css);
-	struct vmpressure *vmpr = memcg_to_vmpressure(memcg);
-	unsigned long vmpressure;
 
-	vmpressure = vmpr->pressure;
-
-	return vmpressure;
-}
 static u64 mem_cgroup_swappiness_read(struct cgroup_subsys_state *css,
 				      struct cftype *cft)
 {
@@ -3680,6 +3619,7 @@ static void mem_cgroup_threshold(struct mem_cgroup *memcg)
 		__mem_cgroup_threshold(memcg, false);
 		if (do_memsw_account())
 			__mem_cgroup_threshold(memcg, true);
+
 		memcg = parent_mem_cgroup(memcg);
 	}
 }
@@ -4180,7 +4120,6 @@ static ssize_t memcg_write_event_control(struct kernfs_open_file *of,
 	unsigned int efd, cfd;
 	struct fd efile;
 	struct fd cfile;
-	struct dentry *cdentry;
 	const char *name;
 	char *endp;
 	int ret;
@@ -4232,16 +4171,6 @@ static ssize_t memcg_write_event_control(struct kernfs_open_file *of,
 		goto out_put_cfile;
 
 	/*
-	 * The control file must be a regular cgroup1 file. As a regular cgroup
-	 * file can't be renamed, it's safe to access its name afterwards.
-	 */
-	cdentry = cfile.file->f_path.dentry;
-	if (cdentry->d_sb->s_type != &cgroup_fs_type || !d_is_reg(cdentry)) {
-		ret = -EINVAL;
-		goto out_put_cfile;
-	}
-
-	/*
 	 * Determine the event callbacks and set them in @event.  This used
 	 * to be done via struct cftype but cgroup core no longer knows
 	 * about these events.  The following is crude but the whole thing
@@ -4249,7 +4178,7 @@ static ssize_t memcg_write_event_control(struct kernfs_open_file *of,
 	 *
 	 * DO NOT ADD NEW FILES.
 	 */
-	name = cdentry->d_name.name;
+	name = cfile.file->f_path.dentry->d_name.name;
 
 	if (!strcmp(name, "memory.usage_in_bytes")) {
 		event->register_event = mem_cgroup_usage_register_event;
@@ -4273,7 +4202,7 @@ static ssize_t memcg_write_event_control(struct kernfs_open_file *of,
 	 * automatically removed on cgroup destruction but the removal is
 	 * asynchronous, so take an extra ref on @css.
 	 */
-	cfile_css = css_tryget_online_from_dir(cdentry->d_parent,
+	cfile_css = css_tryget_online_from_dir(cfile.file->f_path.dentry->d_parent,
 					       &memory_cgrp_subsys);
 	ret = -EINVAL;
 	if (IS_ERR(cfile_css))
@@ -4379,20 +4308,10 @@ static struct cftype mem_cgroup_legacy_files[] = {
 	{
 		.name = "pressure_level",
 	},
-	{
-		.name = "vmpressure",
-		.read_u64 = mem_cgroup_vmpressure_read,
-	},
 #ifdef CONFIG_NUMA
 	{
 		.name = "numa_stat",
 		.seq_show = memcg_numa_stat_show,
-	},
-#endif
-#ifdef CONFIG_MEMCG_HEIMDALL
-	{
-		.name = "force_shrink",
-		.write = mem_cgroup_force_shrink_write,
 	},
 #endif
 	{
@@ -5173,17 +5092,16 @@ static int mem_cgroup_count_precharge_pte_range(pmd_t *pmd,
 	return 0;
 }
 
+static const struct mm_walk_ops precharge_walk_ops = {
+	.pmd_entry	= mem_cgroup_count_precharge_pte_range,
+};
+
 static unsigned long mem_cgroup_count_precharge(struct mm_struct *mm)
 {
 	unsigned long precharge;
 
-	struct mm_walk mem_cgroup_count_precharge_walk = {
-		.pmd_entry = mem_cgroup_count_precharge_pte_range,
-		.mm = mm,
-	};
 	down_read(&mm->mmap_sem);
-	walk_page_range(0, mm->highest_vm_end,
-			&mem_cgroup_count_precharge_walk);
+	walk_page_range(mm, 0, mm->highest_vm_end, &precharge_walk_ops, NULL);
 	up_read(&mm->mmap_sem);
 
 	precharge = mc.precharge;
@@ -5452,13 +5370,12 @@ put:			/* get_mctgt_type() gets the page */
 	return ret;
 }
 
+static const struct mm_walk_ops charge_walk_ops = {
+	.pmd_entry	= mem_cgroup_move_charge_pte_range,
+};
+
 static void mem_cgroup_move_charge(void)
 {
-	struct mm_walk mem_cgroup_move_charge_walk = {
-		.pmd_entry = mem_cgroup_move_charge_pte_range,
-		.mm = mc.mm,
-	};
-
 	lru_add_drain_all();
 	/*
 	 * Signal lock_page_memcg() to take the memcg's move_lock
@@ -5484,7 +5401,8 @@ retry:
 	 * When we have consumed all precharges and failed in doing
 	 * additional charge, the page walk just aborts.
 	 */
-	walk_page_range(0, mc.mm->highest_vm_end, &mem_cgroup_move_charge_walk);
+	walk_page_range(mc.mm, 0, mc.mm->highest_vm_end, &charge_walk_ops,
+			NULL);
 
 	up_read(&mc.mm->mmap_sem);
 	atomic_dec(&mc.from->moving_account);

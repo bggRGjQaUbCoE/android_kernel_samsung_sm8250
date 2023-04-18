@@ -947,7 +947,6 @@ static int __init kzerod_init(void)
 #endif
 
 	spin_lock_init(&prezeroed_lock);
-	am_app_launch_notifier_register(&kzerod_app_launch_nb);
 	task_kzerod = kthread_run(kzerod, NULL, "kzerod");
 	if (IS_ERR(task_kzerod)) {
 		task_kzerod = NULL;

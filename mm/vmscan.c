@@ -775,7 +775,7 @@ void drop_slab_node(int nid)
 		struct mem_cgroup *memcg = NULL;
 
 		freed = 0;
-		memcg = if (!total_swap_pages)mem_cgroup_iter(NULL, NULL, NULL);
+		memcg = mem_cgroup_iter(NULL, NULL, NULL);
 		do {
 			freed += shrink_slab(GFP_KERNEL, nid, memcg, 0);
 		} while ((memcg = mem_cgroup_iter(NULL, memcg, NULL)) != NULL);
@@ -4923,213 +4923,6 @@ static int advance_seq(char cmd, int memcg_id, int nid, unsigned long seq,
 
 	lruvec = mem_cgroup_lruvec(NODE_DATA(nid), memcg);
 
-/* mem_boost throttles only kswapd's behavior */
-enum mem_boost {
-	NO_BOOST,
-	BOOST_MID = 1,
-	BOOST_HIGH = 2,
-	BOOST_KILL = 3,
-};
-static int mem_boost_mode = NO_BOOST;
-static unsigned long last_mode_change;
-static bool am_app_launch = false;
-
-#define MEM_BOOST_MAX_TIME (5 * HZ) /* 5 sec */
-
-#ifdef CONFIG_SYSFS
-static ssize_t mem_boost_mode_show(struct kobject *kobj,
-				    struct kobj_attribute *attr, char *buf)
-{
-	if (time_after(jiffies, last_mode_change + MEM_BOOST_MAX_TIME))
-		mem_boost_mode = NO_BOOST;
-	return sprintf(buf, "%d\n", mem_boost_mode);
-}
-
-static ssize_t mem_boost_mode_store(struct kobject *kobj,
-				     struct kobj_attribute *attr,
-				     const char *buf, size_t count)
-{
-	int mode;
-	int err;
-
-	err = kstrtoint(buf, 10, &mode);
-	if (err || mode > BOOST_KILL || mode < NO_BOOST)
-		return -EINVAL;
-
-	mem_boost_mode = mode;
-	last_mode_change = jiffies;
-#ifdef CONFIG_ION_RBIN_HEAP
-	if (mem_boost_mode >= BOOST_HIGH)
-		wake_ion_rbin_heap_prereclaim();
-#endif
-	return count;
-}
-
-ATOMIC_NOTIFIER_HEAD(am_app_launch_notifier);
-
-int am_app_launch_notifier_register(struct notifier_block *nb)
-{
-	return atomic_notifier_chain_register(&am_app_launch_notifier, nb);
-}
-
-int am_app_launch_notifier_unregister(struct notifier_block *nb)
-{
-	return  atomic_notifier_chain_unregister(&am_app_launch_notifier, nb);
-}
-
-static ssize_t am_app_launch_show(struct kobject *kobj,
-				  struct kobj_attribute *attr, char *buf)
-{
-	int ret;
-
-	ret = am_app_launch ? 1 : 0;
-	return sprintf(buf, "%d\n", ret);
-}
-
-static int notify_app_launch_started(void)
-{
-	trace_printk("%s\n", "am_app_launch started");
-	atomic_notifier_call_chain(&am_app_launch_notifier, 1, NULL);
-	return 0;
-}
-
-static int notify_app_launch_finished(void)
-{
-	trace_printk("%s\n", "am_app_launch finished");
-	atomic_notifier_call_chain(&am_app_launch_notifier, 0, NULL);
-	return 0;
-}
-
-static ssize_t am_app_launch_store(struct kobject *kobj,
-				   struct kobj_attribute *attr,
-				   const char *buf, size_t count)
-{
-	int mode;
-	int err;
-	bool am_app_launch_new;
-
-	err = kstrtoint(buf, 10, &mode);
-	if (err || (mode != 0 && mode != 1))
-		return -EINVAL;
-
-	am_app_launch_new = mode ? true : false;
-	trace_printk("am_app_launch %d -> %d\n", am_app_launch,
-		     am_app_launch_new);
-	if (am_app_launch != am_app_launch_new) {
-		if (am_app_launch_new)
-			notify_app_launch_started();
-		else
-			notify_app_launch_finished();
-	}
-	am_app_launch = am_app_launch_new;
-
-	return count;
-}
-
-#define MEM_BOOST_ATTR(_name) \
-	static struct kobj_attribute _name##_attr = \
-		__ATTR(_name, 0644, _name##_show, _name##_store)
-MEM_BOOST_ATTR(mem_boost_mode);
-MEM_BOOST_ATTR(am_app_launch);
-
-static struct attribute *vmscan_attrs[] = {
-	&mem_boost_mode_attr.attr,
-	&am_app_launch_attr.attr,
-	NULL,
-};
-
-static struct attribute_group vmscan_attr_group = {
-	.attrs = vmscan_attrs,
-	.name = "vmscan",
-};
-#endif
-
-static inline bool mem_boost_pgdat_wmark(struct pglist_data *pgdat)
-{
-	int z;
-	struct zone *zone;
-	unsigned long mark;
-
-	for (z = 0; z < MAX_NR_ZONES; z++) {
-		zone = &pgdat->node_zones[z];
-		if (!managed_zone(zone))
-			continue;
-		mark = low_wmark_pages(zone); //TODO: low, high, or (low + high)/2
-		if (zone_watermark_ok_safe(zone, 0, mark, 0))
-			return true;
-	}
-	return false;
-}
-
-#define MEM_BOOST_THRESHOLD ((600 * 1024 * 1024) / (PAGE_SIZE))
-inline bool need_memory_boosting(struct pglist_data *pgdat)
-{
-	bool ret;
-	unsigned long pgdatfile = node_page_state(pgdat, NR_ACTIVE_FILE) +
-				node_page_state(pgdat, NR_INACTIVE_FILE);
-
-	if (time_after(jiffies, last_mode_change + MEM_BOOST_MAX_TIME) ||
-			pgdatfile < MEM_BOOST_THRESHOLD)
-		mem_boost_mode = NO_BOOST;
-
-	switch (mem_boost_mode) {
-	case BOOST_KILL:
-	case BOOST_HIGH:
-		ret = true;
-		break;
-	case BOOST_MID:
-		ret = mem_boost_pgdat_wmark(pgdat) ? false : true;
-		break;
-	case NO_BOOST:
-	default:
-		ret = false;
-		break;
-	}
-	return ret;
-}
-
-static struct dentry *vmscan_debug_root;
-
-static int shrinker_debug_show(struct seq_file *s, void *unused)
-{
-	int retry = 10;
-	struct shrinker *shrinker;
-
-readlock_retry:
-	if (!down_read_trylock(&shrinker_rwsem)) {
-		if (retry-- > 0) {
-			msleep(10);
-			goto readlock_retry;
-		}
-
-		return 0;
-	}
-
-	list_for_each_entry(shrinker, &shrinker_list, list)
-		seq_printf(s, "%pF nr_total:%lu nr_delay:%lu jiffies:%u ms cpu:%lu ms\n",
-			shrinker->scan_objects,
-			shrinker->nr_total_scan.counter, 
-			shrinker->nr_delay_scan.counter,
-			jiffies_to_msecs(shrinker->jiffies_time.counter),
-			shrinker->cpu_time.counter / NSEC_PER_MSEC);
-		
-	up_read(&shrinker_rwsem);
-
-	return 0;
-}
-
-static int shrinker_debug_open(struct inode *inode, struct file *file)
-{
-	return single_open(file, shrinker_debug_show, inode->i_private);
-}
-
-static const struct file_operations debug_shrinker_fops = {
-	.open = shrinker_debug_open,
-	.read = seq_read,
-	.llseek = seq_lseek,
-	.release = single_release,
-};
-
 	if (swappiness == -1)
 		swappiness = get_swappiness(lruvec);
 	else if (swappiness > 200U)
@@ -5457,10 +5250,7 @@ static void shrink_node_memcg(struct pglist_data *pgdat, struct mem_cgroup *memc
 	}
 	blk_finish_plug(&plug);
 	sc->nr_reclaimed += nr_reclaimed;
-
-	if (need_memory_boosting(NULL))
-		return;
-
+	
 	/*
 	 * Even if we did not try to evict anon pages at all, we want to
 	 * rebalance the anon lru active/inactive ratio.
@@ -7121,18 +6911,6 @@ static int __init kswapd_init(void)
 					"mm/vmscan:online", kswapd_cpu_online,
 					NULL);
 	WARN_ON(ret < 0);
-#ifdef CONFIG_SYSFS
-	if (sysfs_create_group(mm_kobj, &vmscan_attr_group))
-		pr_err("vmscan: register sysfs failed\n");
-#endif
-
-	vmscan_debug_root = debugfs_create_dir("vmscan", NULL);
-	if (vmscan_debug_root) {
-		if (!debugfs_create_file("shrinker", 0444, vmscan_debug_root,
-				NULL, &debug_shrinker_fops))
-			pr_err("shrinker: failed to debugfs_create_file\n");
-	} else 
-		pr_err("vmscan: failed to debugfs_create_dir\n");
 
 	return 0;
 }

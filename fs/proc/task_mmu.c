@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-2.0
-#include <linux/mm.h>
+#include <linux/pagewalk.h>
 #include <linux/vmacache.h>
 #include <linux/hugetlb.h>
 #include <linux/huge_mm.h>
@@ -20,18 +20,14 @@
 #include <linux/uaccess.h>
 #include <linux/pkeys.h>
 #include <linux/mm_inline.h>
-#include <linux/freezer.h>
 #include <linux/ctype.h>
+#include <linux/sched/signal.h>
 
 #include <asm/elf.h>
 #include <asm/tlb.h>
 #include <asm/tlbflush.h>
 #include "internal.h"
 
-#ifdef CONFIG_ZRAM_LRU_WRITEBACK
-#include <linux/delay.h>
-#include "../../drivers/block/zram/zram_drv.h"
-#endif
 
 #define SEQ_PUT_DEC(str, val) \
 		seq_put_decimal_ull_width(m, str, (val) << (PAGE_SHIFT-10), 8)
@@ -104,29 +100,7 @@ unsigned long task_statm(struct mm_struct *mm,
 	*resident = *shared + get_mm_counter(mm, MM_ANONPAGES);
 	return mm->total_vm;
 }
-void task_statlmkd(struct mm_struct *mm, unsigned long *size,
-			 unsigned long *resident, unsigned long *swapresident)
-{
-#if defined(CONFIG_SWAP)
-	unsigned long swap_orig_nrpages;
-	unsigned long swap_comp_nrpages;
-#endif
 
-	*size = mm->total_vm;
-	*resident = get_mm_counter(mm, MM_FILEPAGES) +
-			get_mm_counter(mm, MM_SHMEMPAGES) +
-			get_mm_counter(mm, MM_ANONPAGES);
-
-#if defined(CONFIG_SWAP)
-	swap_orig_nrpages = get_swap_orig_data_nrpages();
-	swap_comp_nrpages = get_swap_comp_pool_nrpages();
-    
-    if(swap_orig_nrpages > 0){
-        *swapresident = get_mm_counter(mm, MM_SWAPENTS) *
-                    swap_comp_nrpages / swap_orig_nrpages;
-    }
-#endif
-}
 #ifdef CONFIG_NUMA
 /*
  * Save get_task_policy() for show_numa_map().
@@ -168,7 +142,7 @@ static void seq_print_vma_name(struct seq_file *m, struct vm_area_struct *vma)
 	page_offset = (unsigned long)name - page_start_vaddr;
 	num_pages = DIV_ROUND_UP(page_offset + max_len, PAGE_SIZE);
 
-	seq_puts(m, "[anon:");
+	seq_write(m, "[anon:", 6);
 
 	for (i = 0; i < num_pages; i++) {
 		int len;
@@ -180,7 +154,7 @@ static void seq_print_vma_name(struct seq_file *m, struct vm_area_struct *vma)
 		pages_pinned = get_user_pages_remote(current, mm,
 				page_start_vaddr, 1, 0, &page, NULL, NULL);
 		if (pages_pinned < 1) {
-			seq_puts(m, "<fault>]");
+			seq_write(m, "<fault>]\n", 9);
 			return;
 		}
 
@@ -200,7 +174,7 @@ static void seq_print_vma_name(struct seq_file *m, struct vm_area_struct *vma)
 		page_start_vaddr += PAGE_SIZE;
 	}
 
-	seq_putc(m, ']');
+	seq_write(m, "]\n", 2);
 }
 
 static void vma_stop(struct proc_maps_private *priv)
@@ -356,24 +330,117 @@ static int is_stack(struct vm_area_struct *vma)
 		vma->vm_end >= vma->vm_mm->start_stack;
 }
 
-static void show_vma_header_prefix(struct seq_file *m,
-				   unsigned long start, unsigned long end,
-				   vm_flags_t flags, unsigned long long pgoff,
-				   dev_t dev, unsigned long ino)
+#define print_vma_hex10(out, val, clz_fn) \
+({									\
+	const typeof(val) __val = val;					\
+	char *const __out = out;					\
+	size_t __len;							\
+									\
+	if (__val) {							\
+		__len = (sizeof(__val) * 8 - clz_fn(__val) + 3) / 4;	\
+		switch (__len) {					\
+		case 10:						\
+			__out[9] = hex_asc[(__val >>  0) & 0xf];	\
+			__out[8] = hex_asc[(__val >>  4) & 0xf];	\
+			__out[7] = hex_asc[(__val >>  8) & 0xf];	\
+			__out[6] = hex_asc[(__val >> 12) & 0xf];	\
+			__out[5] = hex_asc[(__val >> 16) & 0xf];	\
+			__out[4] = hex_asc[(__val >> 20) & 0xf];	\
+			__out[3] = hex_asc[(__val >> 24) & 0xf];	\
+			__out[2] = hex_asc[(__val >> 28) & 0xf];	\
+			__out[1] = hex_asc[(__val >> 32) & 0xf];	\
+			__out[0] = hex_asc[(__val >> 36) & 0xf];	\
+			break;						\
+		case 9:							\
+			__out[8] = hex_asc[(__val >>  0) & 0xf];	\
+			__out[7] = hex_asc[(__val >>  4) & 0xf];	\
+			__out[6] = hex_asc[(__val >>  8) & 0xf];	\
+			__out[5] = hex_asc[(__val >> 12) & 0xf];	\
+			__out[4] = hex_asc[(__val >> 16) & 0xf];	\
+			__out[3] = hex_asc[(__val >> 20) & 0xf];	\
+			__out[2] = hex_asc[(__val >> 24) & 0xf];	\
+			__out[1] = hex_asc[(__val >> 28) & 0xf];	\
+			__out[0] = hex_asc[(__val >> 32) & 0xf];	\
+			break;						\
+		default:						\
+			__out[7] = hex_asc[(__val >>  0) & 0xf];	\
+			__out[6] = hex_asc[(__val >>  4) & 0xf];	\
+			__out[5] = hex_asc[(__val >>  8) & 0xf];	\
+			__out[4] = hex_asc[(__val >> 12) & 0xf];	\
+			__out[3] = hex_asc[(__val >> 16) & 0xf];	\
+			__out[2] = hex_asc[(__val >> 20) & 0xf];	\
+			__out[1] = hex_asc[(__val >> 24) & 0xf];	\
+			__out[0] = hex_asc[(__val >> 28) & 0xf];	\
+			__len = 8;					\
+			break;						\
+		}							\
+	} else {							\
+		*(u64 *)__out = U64_C(0x3030303030303030);		\
+		__len = 8;						\
+	}								\
+									\
+	__len;								\
+})
+
+#define print_vma_hex2(out, val) \
+({									\
+	const typeof(val) __val = val;					\
+	char *const __out = out;					\
+									\
+	__out[1] = hex_asc[(__val >>  0) & 0xf];			\
+	__out[0] = hex_asc[(__val >>  4) & 0xf];			\
+									\
+	2;								\
+})
+
+static int show_vma_header_prefix(struct seq_file *m, unsigned long start,
+				  unsigned long end, vm_flags_t flags,
+				  unsigned long long pgoff, dev_t dev,
+				  unsigned long ino)
 {
-	seq_setwidth(m, 25 + sizeof(void *) * 6 - 1);
-	seq_put_hex_ll(m, NULL, start, 8);
-	seq_put_hex_ll(m, "-", end, 8);
-	seq_putc(m, ' ');
-	seq_putc(m, flags & VM_READ ? 'r' : '-');
-	seq_putc(m, flags & VM_WRITE ? 'w' : '-');
-	seq_putc(m, flags & VM_EXEC ? 'x' : '-');
-	seq_putc(m, flags & VM_MAYSHARE ? 's' : 'p');
-	seq_put_hex_ll(m, " ", pgoff, 8);
-	seq_put_hex_ll(m, " ", MAJOR(dev), 2);
-	seq_put_hex_ll(m, ":", MINOR(dev), 2);
-	seq_put_decimal_ull(m, " ", ino);
-	seq_putc(m, ' ');
+	size_t len;
+	char *out;
+
+	/* Set the overflow status to get more memory if there's no space */
+	if (seq_get_buf(m, &out) < 65) {
+		seq_commit(m, -1);
+		return -ENOMEM;
+	}
+
+	/* Supports printing up to 40 bits per virtual address */
+	BUILD_BUG_ON(CONFIG_ARM64_VA_BITS > 40);
+
+	len = print_vma_hex10(out, start, __builtin_clzl);
+
+	out[len++] = '-';
+
+	len += print_vma_hex10(out + len, end, __builtin_clzl);
+
+	out[len++] = ' ';
+	out[len++] = "-r"[!!(flags & VM_READ)];
+	out[len++] = "-w"[!!(flags & VM_WRITE)];
+	out[len++] = "-x"[!!(flags & VM_EXEC)];
+	out[len++] = "ps"[!!(flags & VM_MAYSHARE)];
+	out[len++] = ' ';
+
+	len += print_vma_hex10(out + len, pgoff, __builtin_clzll);
+
+	out[len++] = ' ';
+
+	len += print_vma_hex2(out + len, MAJOR(dev));
+
+	out[len++] = ':';
+
+	len += print_vma_hex2(out + len, MINOR(dev));
+
+	out[len++] = ' ';
+
+	len += num_to_str(&out[len], 20, ino, 0);
+
+	out[len++] = ' ';
+
+	m->count += len;
+	return 0;
 }
 
 static void
@@ -397,16 +464,41 @@ show_map_vma(struct seq_file *m, struct vm_area_struct *vma)
 
 	start = vma->vm_start;
 	end = vma->vm_end;
-	show_vma_header_prefix(m, start, end, flags, pgoff, dev, ino);
+	if (show_vma_header_prefix(m, start, end, flags, pgoff, dev, ino))
+		return;
 
 	/*
 	 * Print the dentry name for named mappings, and a
 	 * special [heap] marker for the heap:
 	 */
 	if (file) {
-		seq_pad(m, ' ');
-		seq_file_path(m, file, "\n");
-		goto done;
+		char *buf;
+		size_t size = seq_get_buf(m, &buf);
+
+		/*
+		 * This won't escape newline characters from the path. If a
+		 * program uses newlines in its paths then it can kick rocks.
+		 */
+		if (size > 1) {
+			char *p;
+
+			p = d_path(&file->f_path, buf, size);
+			if (!IS_ERR(p)) {
+				size_t len;
+
+				/* Minus one to exclude the NUL character */
+				len = size - (p - buf) - 1;
+				if (likely(p > buf))
+					memmove(buf, p, len);
+				buf[len] = '\n';
+				seq_commit(m, len + 1);
+				return;
+			}
+		}
+
+		/* Set the overflow status to get more memory */
+		seq_commit(m, -1);
+		return;
 	}
 
 	if (vma->vm_ops && vma->vm_ops->name) {
@@ -418,32 +510,30 @@ show_map_vma(struct seq_file *m, struct vm_area_struct *vma)
 	name = arch_vma_name(vma);
 	if (!name) {
 		if (!mm) {
-			name = "[vdso]";
-			goto done;
+			seq_write(m, "[vdso]\n", 7);
+			return;
 		}
 
 		if (vma->vm_start <= mm->brk &&
 		    vma->vm_end >= mm->start_brk) {
-			name = "[heap]";
-			goto done;
+			seq_write(m, "[heap]\n", 7);
+			return;
 		}
 
 		if (is_stack(vma)) {
-			name = "[stack]";
-			goto done;
+			seq_write(m, "[stack]\n", 8);
+			return;
 		}
 
 		if (vma_get_anon_name(vma)) {
-			seq_pad(m, ' ');
 			seq_print_vma_name(m, vma);
+			return;
 		}
 	}
 
 done:
-	if (name) {
-		seq_pad(m, ' ');
+	if (name)
 		seq_puts(m, name);
-	}
 	seq_putc(m, '\n');
 }
 
@@ -505,9 +595,6 @@ struct mem_size_stats {
 	unsigned long anonymous_thp;
 	unsigned long shmem_thp;
 	unsigned long swap;
-#ifdef CONFIG_ZRAM_LRU_WRITEBACK
-	unsigned long writeback;
-#endif
 	unsigned long shared_hugetlb;
 	unsigned long private_hugetlb;
 	u64 pss;
@@ -584,7 +671,9 @@ static int smaps_pte_hole(unsigned long addr, unsigned long end,
 
 	return 0;
 }
-#endif
+#else
+#define smaps_pte_hole		NULL
+#endif /* CONFIG_SHMEM */
 
 static void smaps_pte_entry(pte_t *pte, unsigned long addr,
 		struct mm_walk *walk)
@@ -603,10 +692,6 @@ static void smaps_pte_entry(pte_t *pte, unsigned long addr,
 			int mapcount;
 
 			mss->swap += PAGE_SIZE;
-#ifdef CONFIG_ZRAM_LRU_WRITEBACK
-			if (is_writeback_entry(swpent))
-				mss->writeback += PAGE_SIZE;
-#endif
 			mapcount = swp_swapcount(swpent);
 			if (mapcount >= 2) {
 				u64 pss_delta = (u64)PAGE_SIZE << PSS_SHIFT;
@@ -795,28 +880,33 @@ static int smaps_hugetlb_range(pte_t *pte, unsigned long hmask,
 			page = device_private_entry_to_page(swpent);
 	}
 	if (page) {
-		if (page_mapcount(page) >= 2 || hugetlb_pmd_shared(pte))
+		int mapcount = page_mapcount(page);
+
+		if (mapcount >= 2)
 			mss->shared_hugetlb += huge_page_size(hstate_vma(vma));
 		else
 			mss->private_hugetlb += huge_page_size(hstate_vma(vma));
 	}
 	return 0;
 }
+#else
+#define smaps_hugetlb_range	NULL
 #endif /* HUGETLB_PAGE */
+
+static const struct mm_walk_ops smaps_walk_ops = {
+	.pmd_entry		= smaps_pte_range,
+	.hugetlb_entry		= smaps_hugetlb_range,
+};
+
+static const struct mm_walk_ops smaps_shmem_walk_ops = {
+	.pmd_entry		= smaps_pte_range,
+	.hugetlb_entry		= smaps_hugetlb_range,
+	.pte_hole		= smaps_pte_hole,
+};
 
 static void smap_gather_stats(struct vm_area_struct *vma,
 			     struct mem_size_stats *mss)
 {
-	struct mm_walk smaps_walk = {
-		.pmd_entry = smaps_pte_range,
-#ifdef CONFIG_HUGETLB_PAGE
-		.hugetlb_entry = smaps_hugetlb_range,
-#endif
-		.mm = vma->vm_mm,
-	};
-
-	smaps_walk.private = mss;
-
 #ifdef CONFIG_SHMEM
 	/* In case of smaps_rollup, reset the value from previous vma */
 	mss->check_shmem_swap = false;
@@ -838,12 +928,13 @@ static void smap_gather_stats(struct vm_area_struct *vma,
 			mss->swap += shmem_swapped;
 		} else {
 			mss->check_shmem_swap = true;
-			smaps_walk.pte_hole = smaps_pte_hole;
+			walk_page_vma(vma, &smaps_shmem_walk_ops, mss);
+			return;
 		}
 	}
 #endif
 	/* mmap_sem is held in m_start */
-	walk_page_vma(vma, &smaps_walk);
+	walk_page_vma(vma, &smaps_walk_ops, mss);
 }
 
 #define SEQ_PUT_DEC(str, val) \
@@ -869,9 +960,6 @@ static void __show_smap(struct seq_file *m, const struct mem_size_stats *mss)
 	SEQ_PUT_DEC(" kB\nSwap:           ", mss->swap);
 	SEQ_PUT_DEC(" kB\nSwapPss:        ",
 					mss->swap_pss >> PSS_SHIFT);
-#ifdef CONFIG_ZRAM_LRU_WRITEBACK
-	SEQ_PUT_DEC(" kB\nWriteback:      ", mss->writeback);
-#endif
 	SEQ_PUT_DEC(" kB\nLocked:         ",
 					mss->pss_locked >> PSS_SHIFT);
 	seq_puts(m, " kB\n");
@@ -890,7 +978,6 @@ static int show_smap(struct seq_file *m, void *v)
 	if (vma_get_anon_name(vma)) {
 		seq_puts(m, "Name:           ");
 		seq_print_vma_name(m, vma);
-		seq_putc(m, '\n');
 	}
 
 	SEQ_PUT_DEC("Size:           ", vma->vm_end - vma->vm_start);
@@ -943,9 +1030,8 @@ static int show_smaps_rollup(struct seq_file *m, void *v)
 		last_vma_end = vma->vm_end;
 	}
 
-	show_vma_header_prefix(m, priv->mm->mmap ? priv->mm->mmap->vm_start : 0,
+	show_vma_header_prefix(m, priv->mm->mmap->vm_start,
 			       last_vma_end, 0, 0, 0, 0);
-	seq_pad(m, ' ');
 	seq_puts(m, "[rollup]\n");
 
 	__show_smap(m, &mss);
@@ -1183,6 +1269,11 @@ static int clear_refs_test_walk(unsigned long start, unsigned long end,
 	return 0;
 }
 
+static const struct mm_walk_ops clear_refs_walk_ops = {
+	.pmd_entry		= clear_refs_pte_range,
+	.test_walk		= clear_refs_test_walk,
+};
+
 static ssize_t clear_refs_write(struct file *file, const char __user *buf,
 				size_t count, loff_t *ppos)
 {
@@ -1214,12 +1305,6 @@ static ssize_t clear_refs_write(struct file *file, const char __user *buf,
 	if (mm) {
 		struct clear_refs_private cp = {
 			.type = type,
-		};
-		struct mm_walk clear_refs_walk = {
-			.pmd_entry = clear_refs_pte_range,
-			.test_walk = clear_refs_test_walk,
-			.mm = mm,
-			.private = &cp,
 		};
 
 		if (type == CLEAR_REFS_MM_HIWATER_RSS) {
@@ -1281,7 +1366,8 @@ static ssize_t clear_refs_write(struct file *file, const char __user *buf,
 			}
 			mmu_notifier_invalidate_range_start(mm, 0, -1);
 		}
-		walk_page_range(0, mm->highest_vm_end, &clear_refs_walk);
+		walk_page_range(mm, 0, mm->highest_vm_end, &clear_refs_walk_ops,
+				&cp);
 		if (type == CLEAR_REFS_SOFT_DIRTY)
 			mmu_notifier_invalidate_range_end(mm, 0, -1);
 		tlb_finish_mmu(&tlb, 0, -1);
@@ -1553,7 +1639,15 @@ static int pagemap_hugetlb_range(pte_t *ptep, unsigned long hmask,
 
 	return err;
 }
+#else
+#define pagemap_hugetlb_range	NULL
 #endif /* HUGETLB_PAGE */
+
+static const struct mm_walk_ops pagemap_ops = {
+	.pmd_entry	= pagemap_pmd_range,
+	.pte_hole	= pagemap_pte_hole,
+	.hugetlb_entry	= pagemap_hugetlb_range,
+};
 
 /*
  * /proc/pid/pagemap - an array mapping virtual pages to pfns
@@ -1586,7 +1680,6 @@ static ssize_t pagemap_read(struct file *file, char __user *buf,
 {
 	struct mm_struct *mm = file->private_data;
 	struct pagemapread pm;
-	struct mm_walk pagemap_walk = {};
 	unsigned long src;
 	unsigned long svpfn;
 	unsigned long start_vaddr;
@@ -1613,14 +1706,6 @@ static ssize_t pagemap_read(struct file *file, char __user *buf,
 	ret = -ENOMEM;
 	if (!pm.buffer)
 		goto out_mm;
-
-	pagemap_walk.pmd_entry = pagemap_pmd_range;
-	pagemap_walk.pte_hole = pagemap_pte_hole;
-#ifdef CONFIG_HUGETLB_PAGE
-	pagemap_walk.hugetlb_entry = pagemap_hugetlb_range;
-#endif
-	pagemap_walk.mm = mm;
-	pagemap_walk.private = &pm;
 
 	src = *ppos;
 	svpfn = src / PM_ENTRY_BYTES;
@@ -1650,7 +1735,7 @@ static ssize_t pagemap_read(struct file *file, char __user *buf,
 		ret = down_read_killable(&mm->mmap_sem);
 		if (ret)
 			goto out_free;
-		ret = walk_page_range(start_vaddr, end, &pagemap_walk);
+		ret = walk_page_range(mm, start_vaddr, end, &pagemap_ops, &pm);
 		up_read(&mm->mmap_sem);
 		start_vaddr = end;
 
@@ -1703,19 +1788,34 @@ const struct file_operations proc_pagemap_operations = {
 };
 #endif /* CONFIG_PROC_PAGE_MONITOR */
 
-#ifdef CONFIG_FREEZING
-static inline bool is_pm_freezing(void)
-{
-	return pm_freezing;
-}
-#else
-static inline bool is_pm_freezing(void)
-{
-	return false;
-}
-#endif /* CONFIG_FREEZING */
-
 #ifdef CONFIG_PROCESS_RECLAIM
+#define FOREGROUND_APP_ADJ 0
+#define CACHED_APP_MIN_ADJ 900
+static bool running_state = true;
+static inline bool can_reclaim(short before_reclaim_adj, struct mm_struct *mm, struct task_struct *task)
+{
+	short cur_oom_score_adj;
+
+	if (false == running_state || fatal_signal_pending(task) || task->flags & PF_EXITING ||
+			!list_empty(&mm->mmap_sem.wait_list)) {
+		pr_info("stop reclaim: force\n");
+		return false;
+	}
+
+	cur_oom_score_adj = task->signal->oom_score_adj;
+	if ((cur_oom_score_adj < CACHED_APP_MIN_ADJ &&
+			cur_oom_score_adj < before_reclaim_adj) ||
+			FOREGROUND_APP_ADJ == cur_oom_score_adj) {
+		pr_info("[c:%s %d, r:%s %d] adj adjust %d %d\n",
+			current->comm, current->pid,
+			task->comm, task->pid,
+			before_reclaim_adj, cur_oom_score_adj);
+		return false;
+	}
+
+	return true;
+}
+
 static BLOCKING_NOTIFIER_HEAD(proc_reclaim_notifier);
 
 int proc_reclaim_notifier_register(struct notifier_block *nb)
@@ -1796,22 +1896,10 @@ static int reclaim_pte_range(pmd_t *pmd, unsigned long addr,
 	int isolated;
 	int reclaimed;
 
-#ifdef CONFIG_ZRAM_LRU_WRITEBACK
-	bool is_lru_wb = false;
-
-	if (!strcmp("PerProcessNands", current->comm))
-		is_lru_wb = true;
-#endif
-
-	split_huge_pmd(vma, pmd, addr);
+	split_huge_pmd(vma, addr, pmd);
 	if (pmd_trans_unstable(pmd) || !rp->nr_to_reclaim)
 		return 0;
 cont:
-	if (rwsem_is_contended(&walk->mm->mmap_sem))
-		return -1;
-	if (is_pm_freezing())
-		return -1;
-
 	isolated = 0;
 	pte = pte_offset_map_lock(vma->vm_mm, pmd, addr, &ptl);
 	for (; addr != end; pte++, addr += PAGE_SIZE) {
@@ -1823,17 +1911,10 @@ cont:
 		if (!page)
 			continue;
 
-		if (PageTransCompound(page))
-			continue;
-#ifdef CONFIG_ZRAM_LRU_WRITEBACK
-		if (is_lru_wb && ptep_test_and_clear_young(vma, addr, pte))
-			continue;
-#endif
-
-		if (PageUnevictable(page))
-			continue;
-
 		if (!PageLRU(page))
+			continue;
+
+		if (page_mapcount(page) != 1)
 			continue;
 
 		if (isolate_lru_page(compound_head(page)))
@@ -1870,56 +1951,14 @@ cont:
 		goto cont;
 
 	cond_resched();
-	return 0;
+	return (rp->nr_to_reclaim == 0) ? -EPIPE : 0;
 }
-
-#ifdef CONFIG_ZRAM_LRU_WRITEBACK
-static int writeback_pte_range(pmd_t *pmd, unsigned long addr,
-		unsigned long end, struct mm_walk *walk)
-{
-	struct mm_struct *mm = walk->mm;
-	struct zwbs **zwbs = walk->private;
-	pte_t *pte, ptent;
-	spinlock_t *ptl;
-	LIST_HEAD(swp_entry_list);
-
-	if (pmd_trans_unstable(pmd))
-		return 0;
-	if (rwsem_is_contended(&mm->mmap_sem))
-		return -1;
-	if (is_pm_freezing())
-		return -1;
-	if (zram_is_app_launch())
-		return -EBUSY;
-
-	pte = pte_offset_map_lock(mm, pmd, addr, &ptl);
-	for (; addr != end; pte++, addr += PAGE_SIZE) {
-		ptent = *pte;
-		if (is_swap_pte(ptent)) {
-			swp_entry_t entry = pte_to_swp_entry(ptent);
-			if (unlikely(non_swap_entry(entry)))
-				continue;
-			if (swp_swapcount(entry) > 1)
-				continue;
-			swap_add_to_list(&swp_entry_list, entry);
-		}
-	}
-	pte_unmap_unlock(pte - 1, ptl);
-	swap_writeback_list(zwbs, &swp_entry_list);
-
-	cond_resched();
-	return 0;
-}
-#endif
 
 enum reclaim_type {
 	RECLAIM_FILE,
 	RECLAIM_ANON,
 	RECLAIM_ALL,
 	RECLAIM_RANGE,
-#ifdef CONFIG_ZRAM_LRU_WRITEBACK
-	RECLAIM_WRITEBACK,
-#endif
 };
 
 struct reclaim_param reclaim_task_nomap(struct task_struct *task,
@@ -1945,12 +1984,15 @@ out:
 	return rp;
 }
 
+static const struct mm_walk_ops reclaim_walk_ops = {
+	.pmd_entry = reclaim_pte_range,
+};
+
 struct reclaim_param reclaim_task_anon(struct task_struct *task,
 		int nr_to_reclaim)
 {
 	struct mm_struct *mm;
 	struct vm_area_struct *vma;
-	struct mm_walk reclaim_walk = {};
 	struct reclaim_param rp = {
 		.nr_to_reclaim = nr_to_reclaim,
 	};
@@ -1959,11 +2001,6 @@ struct reclaim_param reclaim_task_anon(struct task_struct *task,
 	mm = get_task_mm(task);
 	if (!mm)
 		goto out;
-
-	reclaim_walk.mm = mm;
-	reclaim_walk.pmd_entry = reclaim_pte_range;
-
-	reclaim_walk.private = &rp;
 
 	down_read(&mm->mmap_sem);
 	for (vma = mm->mmap; vma; vma = vma->vm_next) {
@@ -1977,9 +2014,8 @@ struct reclaim_param reclaim_task_anon(struct task_struct *task,
 			break;
 
 		rp.vma = vma;
-		if (walk_page_range(vma->vm_start, vma->vm_end,
-			&reclaim_walk))
-			break;
+		walk_page_range(mm, vma->vm_start, vma->vm_end,
+			&reclaim_walk_ops, &rp);
 	}
 
 	flush_tlb_mm(mm);
@@ -1999,14 +2035,11 @@ static ssize_t reclaim_write(struct file *file, const char __user *buf,
 	struct vm_area_struct *vma;
 	enum reclaim_type type;
 	char *type_buf;
-	struct mm_walk reclaim_walk = {};
+	short before_reclaim_adj;
 	unsigned long start = 0;
 	unsigned long end = 0;
 	struct reclaim_param rp;
-#ifdef CONFIG_ZRAM_LRU_WRITEBACK
-	struct zwbs *zwbs[NR_ZWBS];
-	int err = 0;
-#endif
+	int ret;
 
 	memset(buffer, 0, sizeof(buffer));
 	if (count > sizeof(buffer) - 1)
@@ -2022,19 +2055,20 @@ static ssize_t reclaim_write(struct file *file, const char __user *buf,
 		type = RECLAIM_ANON;
 	else if (!strcmp(type_buf, "all"))
 		type = RECLAIM_ALL;
-	else if (isdigit(*type_buf))
+	else if (!strcmp(type_buf, "start")) {
+		running_state = true;
+		return count;
+	} else if (!strcmp(type_buf, "end")) {
+		running_state = false;
+		return count;
+	} else if (isdigit(*type_buf))
 		type = RECLAIM_RANGE;
-#ifdef CONFIG_ZRAM_LRU_WRITEBACK
-	else if (!strcmp(type_buf, "writeback"))
-		type = RECLAIM_WRITEBACK;
-#endif
 	else
 		goto out_err;
 
-#ifdef CONFIG_PROCESS_RECLAIM_IGNORE_ALL_TYPE
-	if (type == RECLAIM_ALL)
+	if (false == running_state)
 		return count;
-#endif
+
 	if (type == RECLAIM_RANGE) {
 		char *token;
 		unsigned long long len, len_in, tmp;
@@ -2069,32 +2103,18 @@ static ssize_t reclaim_write(struct file *file, const char __user *buf,
 	task = get_proc_task(file->f_path.dentry->d_inode);
 	if (!task)
 		return -ESRCH;
-#ifdef CONFIG_ZRAM_LRU_WRITEBACK
-	if (type == RECLAIM_WRITEBACK) {
-		if (alloc_zwbs(zwbs)) {
-			pr_info("%s alloc_zwbs failed", __func__);
-			return -ENOMEM;
-		}
-	}
-#endif
 
 	mm = get_task_mm(task);
 	if (!mm)
 		goto out;
 
-	reclaim_walk.mm = mm;
-	reclaim_walk.pmd_entry = reclaim_pte_range;
-
 	rp.nr_to_reclaim = INT_MAX;
 	rp.nr_reclaimed = 0;
-	reclaim_walk.private = &rp;
-#ifdef CONFIG_ZRAM_LRU_WRITEBACK
-	if (type == RECLAIM_WRITEBACK) {
-		reclaim_walk.pmd_entry = writeback_pte_range;
-		reclaim_walk.private = (void *)zwbs;
-	}
-#endif
 
+	if (NULL == task->signal)
+		goto out;
+
+	before_reclaim_adj = task->signal->oom_score_adj;
 	down_read(&mm->mmap_sem);
 	if (type == RECLAIM_RANGE) {
 		vma = find_vma(mm, start);
@@ -2105,14 +2125,18 @@ static ssize_t reclaim_write(struct file *file, const char __user *buf,
 				continue;
 
 			rp.vma = vma;
-			if (walk_page_range(max(vma->vm_start, start),
+			ret = walk_page_range(mm, max(vma->vm_start, start),
 					min(vma->vm_end, end),
-					&reclaim_walk))
+					&reclaim_walk_ops, &rp);
+			if (ret)
 				break;
 			vma = vma->vm_next;
 		}
 	} else {
 		for (vma = mm->mmap; vma; vma = vma->vm_next) {
+			if (!can_reclaim(before_reclaim_adj, mm, task))
+				break;
+
 			if (is_vm_hugetlb_page(vma))
 				continue;
 
@@ -2123,21 +2147,10 @@ static ssize_t reclaim_write(struct file *file, const char __user *buf,
 				continue;
 
 			rp.vma = vma;
-#ifdef CONFIG_ZRAM_LRU_WRITEBACK
-			if (type == RECLAIM_WRITEBACK && vma->vm_file)
-				continue;
-
-			err = walk_page_range(vma->vm_start, vma->vm_end,
-				&reclaim_walk);
-			if (err) {
-				count = err;
+			ret = walk_page_range(mm, vma->vm_start, vma->vm_end,
+				&reclaim_walk_ops, &rp);
+			if (ret)
 				break;
-			}
-#else
-			if (walk_page_range(vma->vm_start, vma->vm_end,
-				&reclaim_walk))
-				break;
-#endif
 		}
 	}
 
@@ -2146,12 +2159,6 @@ static ssize_t reclaim_write(struct file *file, const char __user *buf,
 	mmput(mm);
 out:
 	put_task_struct(task);
-#ifdef CONFIG_ZRAM_LRU_WRITEBACK
-	if (type == RECLAIM_WRITEBACK) {
-		swap_writeback_list(zwbs, NULL);
-		free_zwbs(zwbs);
-	}
-#endif
 	return count;
 
 out_err:
@@ -2323,6 +2330,11 @@ static int gather_hugetlb_stats(pte_t *pte, unsigned long hmask,
 }
 #endif
 
+static const struct mm_walk_ops show_numa_ops = {
+	.hugetlb_entry = gather_hugetlb_stats,
+	.pmd_entry = gather_pte_stats,
+};
+
 /*
  * Display pages allocated per node and memory policy via /proc.
  */
@@ -2334,12 +2346,6 @@ static int show_numa_map(struct seq_file *m, void *v)
 	struct numa_maps *md = &numa_priv->md;
 	struct file *file = vma->vm_file;
 	struct mm_struct *mm = vma->vm_mm;
-	struct mm_walk walk = {
-		.hugetlb_entry = gather_hugetlb_stats,
-		.pmd_entry = gather_pte_stats,
-		.private = md,
-		.mm = mm,
-	};
 	struct mempolicy *pol;
 	char buffer[64];
 	int nid;
@@ -2373,7 +2379,7 @@ static int show_numa_map(struct seq_file *m, void *v)
 		seq_puts(m, " huge");
 
 	/* mmap_sem is held by m_start */
-	walk_page_vma(vma, &walk);
+	walk_page_vma(vma, &show_numa_ops, md);
 
 	if (!md->pages)
 		goto out;
@@ -2431,184 +2437,3 @@ const struct file_operations proc_pid_numa_maps_operations = {
 };
 
 #endif /* CONFIG_NUMA */
-
-
-#ifdef CONFIG_PAGE_BOOST
-/*
- * Currently, target_file_name is shared by all filemap_info nodes
- * as we do not access this node in parallel. (do not need synchronization also)
- */
-#include <linux/io_record.h>
-#include <linux/atomic.h>
-static atomic_t filemap_fd_opened = ATOMIC_INIT(0);
-char target_file_name[MAX_PAGE_BOOST_FILEPATH_LEN + 1] = "";
-
-static inline bool try_to_get_filemap_fd(void)
-{
-	/* only 1 context is allowed at a time */
-	if (atomic_inc_return(&filemap_fd_opened) == 1)
-		return true;
-	else {
-		atomic_dec(&filemap_fd_opened);
-		return false;
-	}
-}
-
-static inline void put_filemap_fd(void)
-{
-	atomic_dec(&filemap_fd_opened);
-}
-
-static void
-show_filemap_vma(struct seq_file *m, struct vm_area_struct *vma)
-{
-	struct file *file = vma->vm_file;
-	struct proc_filemap_private *priv = m->private;
-	char strbuf[MAX_PAGE_BOOST_FILEPATH_LEN];
-	char *pathname;
-
-	if (!file)
-		return;
-
-	pathname = d_path(&file->f_path, strbuf, MAX_PAGE_BOOST_FILEPATH_LEN);
-	if (IS_ERR(pathname))
-		return;
-
-	if (priv->show_list) {
-		if (!strncmp(pathname, "/data", 5) ||
-		    !strncmp(pathname, "/system", 7)) {
-			seq_puts(m, pathname);
-			seq_putc(m, '\n');
-		}
-	}
-}
-
-static int show_filemap(struct seq_file *m, void *v)
-{
-	show_filemap_vma(m, v);
-	m_cache_vma(m, v);
-	return 0;
-}
-
-static const struct seq_operations proc_pid_filemap_op = {
-	.start	= m_start,
-	.next	= m_next,
-	.stop	= m_stop,
-	.show	= show_filemap,
-};
-
-static int pid_filemap_list_open(struct inode *inode, struct file *file)
-{
-	int psize = sizeof(struct proc_filemap_private);
-	const struct seq_operations *ops = &proc_pid_filemap_op;
-	struct proc_filemap_private *priv = __seq_open_private(file, ops,
-							       psize);
-
-	if (!priv)
-		return -ENOMEM;
-	if (!try_to_get_filemap_fd())
-		return -EINVAL;
-
-	priv->maps_private.inode = inode;
-	priv->maps_private.mm = proc_mem_open(inode, PTRACE_MODE_READ);
-	priv->show_list = true;
-	if (IS_ERR(priv->maps_private.mm)) {
-		int err = PTR_ERR(priv->maps_private.mm);
-
-		put_filemap_fd();
-		seq_release_private(inode, file);
-		return err;
-	}
-
-	return 0;
-}
-
-/* common release for filemap_list and filemap_info */
-static int proc_filemap_release(struct inode *inode, struct file *file)
-{
-	struct seq_file *seq = file->private_data;
-	struct proc_filemap_private *priv = seq->private;
-
-	if (priv->maps_private.mm)
-		mmdrop(priv->maps_private.mm);
-
-	put_filemap_fd();
-	return seq_release_private(inode, file);
-}
-
-/* List mapped files for this process */
-const struct file_operations proc_pid_filemap_list_operations = {
-	.open		= pid_filemap_list_open,
-	.read		= seq_read,
-	.llseek		= seq_lseek,
-	.release	= proc_filemap_release,
-};
-
-#ifdef CONFIG_PAGE_BOOST_RECORDING
-static ssize_t pid_io_record_read(struct file *file, char __user *buf,
-			size_t count, loff_t *ppos)
-{
-	return read_record(buf, count, ppos);
-}
-
-static ssize_t pid_io_record_write(struct file *file,
-					       const char __user *buf,
-					       size_t count, loff_t *ppos)
-{
-	char buffer[PROC_NUMBUF];
-	int itype;
-	enum io_record_cmd_types type;
-	int rv;
-	struct task_struct *task;
-	bool ret = true;
-
-	memset(buffer, 0, sizeof(buffer));
-	if (count > sizeof(buffer) - 1)
-		count = sizeof(buffer) - 1;
-	if (copy_from_user(buffer, buf, count))
-		return -EFAULT;
-	rv = kstrtoint(strstrip(buffer), 10, &itype);
-	if (rv < 0)
-		return rv;
-
-	task = get_proc_task(file_inode(file));
-	if (!task)
-		return -EFAULT;
-
-	type = (enum io_record_cmd_types)itype;
-	if (type < IO_RECORD_INIT || type > IO_RECORD_POST_PROCESSING) {
-		put_task_struct(task);
-		return -EINVAL;
-	}
-
-	switch (type) {
-	case IO_RECORD_INIT:
-		ret = init_record();
-		break;
-	case IO_RECORD_START:
-		ret = start_record((int)task_pid_nr(task));
-		break;
-	case IO_RECORD_STOP:
-		ret = stop_record();
-		break;
-	case IO_RECORD_POST_PROCESSING:
-		ret = post_processing_records();
-		break;
-	default:
-		break;
-	}
-	put_task_struct(task);
-
-	if (!ret)
-		count = -EINVAL;
-
-	return count;
-}
-
-const struct file_operations proc_pid_io_record_operations = {
-	.read		= pid_io_record_read,
-	.write		= pid_io_record_write,
-	.llseek		= noop_llseek,
-};
-#endif
-#endif
