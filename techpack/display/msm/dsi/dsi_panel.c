@@ -15,6 +15,7 @@
 #include "dsi_ctrl_hw.h"
 #include "dsi_parser.h"
 #include "sde_dbg.h"
+#include "exposure_adjustment.h"
 #if defined(CONFIG_DISPLAY_SAMSUNG)
 #include "ss_dsi_panel_common.h"
 #endif
