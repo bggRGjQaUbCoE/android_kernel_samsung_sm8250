@@ -55,10 +55,10 @@ int secdp_logger_init(void);
 
 #else/* !CONFIG_SEC_DISPLAYPORT_LOGGER */
 
-#define secdp_logger_set_max_count(x)			do {} while (0)
-#define secdp_logger_print(fmt, ...)			do {} while (0)
-#define secdp_logger_hex_dump(buf, pref, len)		do {} while (0)
-#define secdp_logger_init(void)				do {} while (0)
+//#define secdp_logger_set_max_count(x)			do {} while (0)
+//#define secdp_logger_print(fmt, ...)			do {} while (0)
+//#define secdp_logger_hex_dump(buf, pref, len)		do {} while (0)
+//#define secdp_logger_init(void)				do {} while (0)
 
 #ifdef pr_debug
 #undef pr_debug
