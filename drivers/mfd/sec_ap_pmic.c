@@ -70,8 +70,8 @@ static ssize_t manual_reset_store(struct device *in_dev,
 
 	pr_info("%s: onoff(%d)\n", __func__, onoff);
 
-	do_keyboard_notifier(onoff);
-qpnp_control_s2_reset_onoff(onoff);
+	//do_keyboard_notifier(onoff);
+//qpnp_control_s2_reset_onoff(onoff);
 
 	return len;
 }

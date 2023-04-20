@@ -1378,7 +1378,6 @@ config BPF
 menuconfig EXPERT
 	bool "Configure standard kernel features (expert users)"
 	# Unhide debug options, to make the on-by-default options visible
-	select DEBUG_KERNEL
 	help
 	  This option allows certain base kernel options and settings
           to be disabled or tweaked. This is for specialized
@@ -1491,7 +1490,7 @@ config PRINTK_NMI
 
 config BUG
 	bool "BUG() support" if EXPERT
-	default y
+	default n
 	help
           Disabling this option eliminates support for BUG and WARN, reducing
           the size of your kernel image and potentially quietly ignoring

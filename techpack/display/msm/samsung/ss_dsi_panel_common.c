@@ -2227,10 +2227,10 @@ int ss_panel_on_pre(struct samsung_display_driver_data *vdd)
 
 	/* Print debug data : fw up fail info */
 	if (vdd->fw_up.is_support)
-		ss_read_fw_up_debug_partition();
+		//ss_read_fw_up_debug_partition();
 
 	if (!ss_panel_attach_get(vdd)) {
-		ss_read_fw_up_debug_partition();
+		//ss_read_fw_up_debug_partition();
 
 		LCD_ERR("ss_panel_attach_get NG\n");
 		return false;
