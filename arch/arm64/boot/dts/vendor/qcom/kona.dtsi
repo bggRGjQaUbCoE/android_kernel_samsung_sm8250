@@ -347,7 +347,8 @@
 	};
 
 	chosen {
-		bootargs = "rcupdate.rcu_expedited=1 rcu_nocbs=0-7 cgroup.memory=nokmem";
+		bootargs = "rcupdate.rcu_expedited=1 quiet noirqdebug nodebugmon kpti=off nosoftlockup mce=ignore_ce cgroup_disable=pressure";
+		rng-seed = <0x12345678>;
 	};
 
 	firmware: firmware {
