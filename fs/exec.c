@@ -2029,25 +2029,21 @@ static int __do_execve_file(int fd, struct filename *filename,
 	if (retval < 0)
 		goto out;
 
-<<<<<<< HEAD
 	/*
 	 * When argv is empty, add an empty string ("") as argv[0] to
 	 * ensure confused userspace programs that start processing
 	 * from argv[1] won't end up walking envp. See also
 	 * bprm_stack_limits().
 	 */
-	if (bprm->argc == 0) {
+	if (bprm.argc == 0) {
 		const char *argv[] = { "", NULL };
-		retval = copy_strings_kernel(1, argv, bprm);
+		retval = copy_strings_kernel(1, argv, &bprm);
 		if (retval < 0)
 			goto out;
-		bprm->argc = 1;
+		bprm.argc = 1;
 	}
 
-	retval = exec_binprm(bprm);
-=======
 	retval = exec_binprm(&bprm);
->>>>>>> af50df26450e (exec: use bprm from the stack space)
 	if (retval < 0)
 		goto out;
 
