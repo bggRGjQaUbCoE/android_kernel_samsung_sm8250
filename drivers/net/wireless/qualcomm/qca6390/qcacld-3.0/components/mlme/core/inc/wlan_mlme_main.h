@@ -543,11 +543,22 @@ mlme_get_operations_bitmap(struct wlan_objmgr_psoc *psoc, uint8_t vdev_id);
  * @reqs: RSO stop requestor
  * @clear: clear bit if true else set bit
  *
- * Return: bitmap value
+ * Return: None
  */
 void
 mlme_set_operations_bitmap(struct wlan_objmgr_psoc *psoc, uint8_t vdev_id,
 			   enum roam_control_requestor reqs, bool clear);
+
+/**
+ * mlme_clear_operations_bitmap() - Clear mlme operations bitmap which
+ *  indicates what mlme operations are in progress
+ * @psoc: PSOC pointer
+ * @vdev_id: vdev for which the mlme operation bitmap is requested
+ *
+ * Return: None
+ */
+void
+mlme_clear_operations_bitmap(struct wlan_objmgr_psoc *psoc, uint8_t vdev_id);
 
 /**
  * mlme_get_cfg_wlm_level() - Get the WLM level value
@@ -597,4 +608,13 @@ QDF_STATUS mlme_get_cfg_wlm_reset(struct wlan_objmgr_psoc *psoc,
  */
 void mlme_reinit_control_config_lfr_params(struct wlan_objmgr_psoc *psoc,
 					   struct wlan_mlme_lfr_cfg *lfr);
+
+/**
+ * wlan_is_vdev_id_up() - check if vdev id is in UP state
+ * @pdev: Pointer to pdev
+ * @vdev_id: vdev id
+ *
+ * Return: if vdev is up
+ */
+bool wlan_is_vdev_id_up(struct wlan_objmgr_pdev *pdev, uint8_t vdev_id);
 #endif
