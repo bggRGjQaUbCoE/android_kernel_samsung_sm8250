@@ -12,6 +12,6 @@ export LLVM_IAS=1
 export ARCH=arm64
 export SUBARCH=arm64
 
-make -j12 O=/home/van/Desktop/out vendor/lineage_y2qdcmw_defconfig
+make -j12 O=out vendor/lineage_y2qdcmw_defconfig
 
-# make -j12 CC=clang O=/home/van/Desktop/out
+# make -j12 CC=clang O=out
