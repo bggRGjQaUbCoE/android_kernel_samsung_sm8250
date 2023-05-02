@@ -198,19 +198,6 @@ void tlb_remove_table_sync_one(void);
 
 #else
 
-#endif /* CONFIG_HAVE_RCU_TABLE_FREE */
-
-#ifdef tlb_needs_table_invalidate
-#error tlb_needs_table_invalidate() requires HAVE_RCU_TABLE_FREE
-
-#else
-
-static inline void tlb_remove_table_sync_one(void) { }
-
-#endif
-
-#else
-
 #ifdef tlb_needs_table_invalidate
 #error tlb_needs_table_invalidate() requires HAVE_RCU_TABLE_FREE
 #endif
