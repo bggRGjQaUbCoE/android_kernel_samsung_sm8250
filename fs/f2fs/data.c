@@ -69,8 +69,7 @@ static bool __is_cp_guaranteed(struct page *page)
 	if (f2fs_is_compressed_page(page))
 		return false;
 	if ((S_ISREG(inode->i_mode) && IS_NOQUOTA(inode)) ||
-			IS_ATOMIC_WRITTEN_PAGE(page))) ||
-			is_cold_data(page))
+			page_private_gcing(page))
 		return true;
 	return false;
 }

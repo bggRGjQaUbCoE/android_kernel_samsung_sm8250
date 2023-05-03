@@ -1783,6 +1783,7 @@ int f2fs_gc(struct f2fs_sb_info *sbi, struct f2fs_gc_control *gc_control)
 		.iroot = RADIX_TREE_INIT(gc_list.iroot, GFP_NOFS),
 	};
 	unsigned int skipped_round = 0, round = 0;
+	unsigned int upper_secs;
 
 	trace_f2fs_gc_begin(sbi->sb, gc_type, gc_control->no_bg_gc,
 				gc_control->nr_free_secs,
@@ -1794,14 +1795,9 @@ int f2fs_gc(struct f2fs_sb_info *sbi, struct f2fs_gc_control *gc_control)
 				reserved_segments(sbi),
 				prefree_segments(sbi));
 
-	gc_start_time = local_clock();
-	/* W/A for FG_GC failure due to Atomic Write File and Pinned File */
-	memset(DIRTY_I(sbi)->blacklist_victim_secmap, 0,
-					f2fs_bitmap_size(MAIN_SECS(sbi)));
-
 	cpc.reason = __get_cp_reason(sbi);
-	sbi->skipped_gc_rwsem = 0;
 gc_more:
+	sbi->skipped_gc_rwsem = 0;
 	if (unlikely(!(sbi->sb->s_flags & SB_ACTIVE))) {
 		ret = -EINVAL;
 		goto stop;
@@ -1811,7 +1807,10 @@ gc_more:
 		goto stop;
 	}
 
-	if (gc_type == BG_GC && has_not_enough_free_secs(sbi, 0, 0)) {
+	/* Let's run FG_GC, if we don't have enough space. */
+	if (has_not_enough_free_secs(sbi, 0, 0)) {
+		gc_type = FG_GC;
+
 		/*
 		 * For example, if there are many prefree_segments below given
 		 * threshold, we can make them free by checkpoint. Then, we
@@ -1822,8 +1821,6 @@ gc_more:
 			if (ret)
 				goto stop;
 		}
-		if (has_not_enough_free_secs(sbi, 0, 0))
-			gc_type = FG_GC;
 	}
 
 	/* f2fs_balance_fs doesn't need to do BG_GC in critical path. */
@@ -1850,19 +1847,15 @@ retry:
 	if (seg_freed == f2fs_usable_segs_in_sec(sbi, segno))
 		sec_freed++;
 
-	if (gc_type == FG_GC)
+	if (gc_type == FG_GC) {
 		sbi->cur_victim_sec = NULL_SEGNO;
 
-	if (gc_control->init_gc_type == FG_GC ||
-	    !has_not_enough_free_secs(sbi,
-				(gc_type == FG_GC) ? sec_freed : 0, 0)) {
-		if (gc_type == FG_GC && sec_freed < gc_control->nr_free_secs)
-			goto go_gc_more;
-		goto stop;
-	}
-
-	/* FG_GC stops GC by skip_count */
-	if (gc_type == FG_GC) {
+		if (has_enough_free_secs(sbi, sec_freed, 0)) {
+			if (!gc_control->no_bg_gc &&
+			    sec_freed < gc_control->nr_free_secs)
+				goto go_gc_more;
+			goto stop;
+		}
 		if (sbi->skipped_gc_rwsem)
 			skipped_round++;
 		round++;
@@ -1871,10 +1864,17 @@ retry:
 			ret = f2fs_write_checkpoint(sbi, &cpc);
 			goto stop;
 		}
+	} else if (has_enough_free_secs(sbi, 0, 0)) {
+		goto stop;
 	}
 
-	/* Write checkpoint to reclaim prefree segments */
-	if (free_sections(sbi) < NR_CURSEG_PERSIST_TYPE &&
+	__get_secs_required(sbi, NULL, &upper_secs, NULL);
+
+	/*
+	 * Write checkpoint to reclaim prefree segments.
+	 * We need more three extra sections for writer's data/node/dentry.
+	 */
+	if (free_sections(sbi) <= upper_secs + NR_GC_CHECKPOINT_SECS &&
 				prefree_segments(sbi)) {
 		ret = f2fs_write_checkpoint(sbi, &cpc);
 		if (ret)
@@ -1888,8 +1888,6 @@ stop:
 	SIT_I(sbi)->last_victim[ALLOC_NEXT] = 0;
 	SIT_I(sbi)->last_victim[FLUSH_DEVICE] = gc_control->victim_segno;
 
-	gc_end_time = local_clock();
-
 	if (gc_type == FG_GC)
 		f2fs_unpin_all_sections(sbi, true);
 
@@ -1902,8 +1900,6 @@ stop:
 				reserved_segments(sbi),
 				prefree_segments(sbi));
 
-	sbi->sec_stat.gc_count[gc_type]++;
-	f2fs_update_gc_total_time(sbi, gc_start_time, gc_end_time, gc_type);
 	f2fs_up_write(&sbi->gc_lock);
 
 	put_gc_inode(&gc_list);
