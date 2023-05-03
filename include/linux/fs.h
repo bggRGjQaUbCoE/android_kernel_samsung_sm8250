@@ -1345,7 +1345,7 @@ extern int send_sigurg(struct fown_struct *fown);
 /* These flags relate to encoding and casefolding */
 #define SB_ENC_STRICT_MODE_FL	(1 << 0)
 
-#define sb_has_enc_strict_mode(sb) \
+#define sb_has_strict_encoding(sb) \
 	(sb->s_encoding_flags & SB_ENC_STRICT_MODE_FL)
 
 /*
@@ -3320,8 +3320,7 @@ static inline bool needs_casefold(const struct inode *dir)
 	return 0;
 }
 #endif
-extern void generic_set_encrypted_ci_d_ops(struct inode *dir,
-					   struct dentry *dentry);
+extern void generic_set_encrypted_ci_d_ops(struct dentry *dentry);
 
 #ifdef CONFIG_MIGRATION
 extern int buffer_migrate_page(struct address_space *,

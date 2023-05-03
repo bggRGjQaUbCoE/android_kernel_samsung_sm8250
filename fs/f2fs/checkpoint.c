@@ -1896,7 +1896,7 @@ static int flush_remained_checkpoint_cmd(struct f2fs_sb_info *sbi, struct checkp
 		cmd = llist_entry(list, struct checkpoint_cmd, llnode);
 
 	set_cmd_dispatch_time(cmd);
-	ret = __write_checkpoint_sync(sbi, cmd, true);
+	ret = __write_checkpoint_sync(sbi);
 	atomic_inc(&ccc->issued_ckpt);
 
 	llist_for_each_entry_safe(tmp, next, list, llnode) {

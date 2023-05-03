@@ -15,7 +15,6 @@
 #include "acl.h"
 #include "xattr.h"
 #include <trace/events/f2fs.h>
-#include <linux/iversion.h>
 
 static unsigned long dir_blocks(struct inode *inode)
 {
