@@ -1928,23 +1928,13 @@ static void set_cmd_complete_time(struct checkpoint_cmd *cmd)
 }
 
 /* "cmd" can be null */
-static int __write_checkpoint_sync(struct f2fs_sb_info *sbi,
-		struct checkpoint_cmd *cmd, bool wait_lock)
+static int __write_checkpoint_sync(struct f2fs_sb_info *sbi)
 {
 	struct cp_control cpc = { .reason = CP_SYNC, };
-	
 	int err;
 
-	if (!down_write_trylock(&sbi->gc_lock)) {
-		if (!wait_lock)
-			return -EBUSY;
-
-		down_write(&sbi->gc_lock);
-	}
-
-	set_cmd_start_time(cmd);
+	f2fs_down_write(&sbi->gc_lock);
 	err = f2fs_write_checkpoint(sbi, &cpc);
-	set_cmd_complete_time(cmd);
 	f2fs_up_write(&sbi->gc_lock);
 
 	return err;
@@ -2003,7 +1993,7 @@ repeat:
 		cmd = llist_entry(ccc->dispatch_list, struct checkpoint_cmd, llnode);
 		set_cmd_dispatch_time(cmd);
 
-		ret = __write_checkpoint_sync(sbi, cmd, true);
+		ret = __write_checkpoint_sync(sbi);
 		atomic_inc(&ccc->issued_ckpt);
 
 		llist_for_each_entry_safe(cmd, next,
@@ -2072,7 +2062,7 @@ static int flush_remained_checkpoint_cmd(struct f2fs_sb_info *sbi, struct checkp
 		cmd = llist_entry(list, struct checkpoint_cmd, llnode);
 
 	set_cmd_dispatch_time(cmd);
-	ret = __write_checkpoint_sync(sbi, cmd, true);
+	ret = __write_checkpoint_sync(sbi);
 	atomic_inc(&ccc->issued_ckpt);
 
 	llist_for_each_entry_safe(tmp, next, list, llnode) {
@@ -2118,7 +2108,7 @@ int f2fs_issue_checkpoint(struct f2fs_sb_info *sbi)
 	int ret;
 
 	if (!ccc || !ccc->ckpt_task)
-		return __write_checkpoint_sync(sbi, NULL, true);
+		return __write_checkpoint_sync(sbi);
 
 	/* if current_task is first one that triggers checkpoint and if it has
 	 * enough cpu time for checkpointing, it tries checkpoint itself.
@@ -2129,7 +2119,7 @@ int f2fs_issue_checkpoint(struct f2fs_sb_info *sbi)
 		/* if checkpoint is in progress by other context,
 		 * just queue checkpoint_cmd
 		 */
-		ret = __write_checkpoint_sync(sbi, NULL, false);
+		ret = __write_checkpoint_sync(sbi);
 		if (ret == -EBUSY)
 			goto queue_cmd;
 

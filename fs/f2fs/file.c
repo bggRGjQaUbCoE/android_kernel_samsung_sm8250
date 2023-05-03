@@ -32,7 +32,6 @@
 #include "iostat.h"
 #include <trace/events/f2fs.h>
 #include <uapi/linux/f2fs.h>
-#include <trace/events/android_fs.h>
 
 #ifdef CONFIG_FSCRYPT_SDP
 #include <linux/fscrypto_sdp_ioctl.h>
@@ -286,15 +285,6 @@ static int f2fs_do_sync_file(struct file *file, loff_t start, loff_t end,
 
 	trace_f2fs_sync_file_enter(inode);
 
-	if (trace_android_fs_fsync_start_enabled()) {
-		char *path, pathbuf[MAX_TRACE_PATHBUF_LEN];
-
-		path = android_fstrace_get_pathname(pathbuf,
-				MAX_TRACE_PATHBUF_LEN, inode);
-		trace_android_fs_fsync_start(inode,
-				current->pid, path, current->comm);
-	}
-
 	if (S_ISDIR(inode->i_mode))
 		goto go_write;
 
@@ -416,7 +406,6 @@ flush_out:
 	f2fs_update_time(sbi, REQ_TIME);
 out:
 	trace_f2fs_sync_file_exit(inode, cp_reason, datasync, ret);
-	trace_android_fs_fsync_end(inode, start, end - start);
 
 	return ret;
 }
@@ -3521,60 +3510,6 @@ out:
 	return err;
 }
 
-static int f2fs_ioc_get_valid_node_count(struct file *filp, unsigned long arg)
-{
-	struct f2fs_sb_info *sbi = F2FS_I_SB(file_inode(filp));
-	u32 node_count = (u32)valid_node_count(sbi);
-
-	return put_user(node_count, (u32 __user *)arg);
-}
-
-static int f2fs_ioc_stat_compress_file(struct file *filp, unsigned long arg)
-{
-	static struct f2fs_sec_heimdallfs_stat heimdallfs_stat;
-	struct inode *inode = file_inode(filp);
-	struct f2fs_sb_info *sbi = F2FS_I_SB(inode);
-	struct f2fs_sec_stat_compfile compStat;
-
-	if (!f2fs_sb_has_compression(F2FS_I_SB(inode)))
-		return -EOPNOTSUPP;
-
-	if (copy_from_user(&compStat, (struct f2fs_sec_stat_compfile __user *)arg,
-				sizeof(compStat)))
-		return -EFAULT;
-
-	compStat.st_blocks = inode->i_blocks;
-	if (unlikely(f2fs_compressed_file(inode))) {
-		compStat.st_compressed_blocks = F2FS_I(inode)->i_compr_blocks;
-		compStat.out_compressed = 1;
-	} else {
-		compStat.out_compressed = 0;
-	}
-
-	if (compStat.in_init)
-		memset(&heimdallfs_stat, 0x0, sizeof(heimdallfs_stat));
-
-	if (compStat.in_scan) {
-		heimdallfs_stat.nr_pkgs++;
-		heimdallfs_stat.nr_pkg_blks += compStat.st_blocks;
-
-		if (unlikely(f2fs_compressed_file(inode))) {
-			heimdallfs_stat.nr_comp_pkgs++;
-			heimdallfs_stat.nr_comp_pkg_blks += compStat.st_blocks;
-			heimdallfs_stat.nr_comp_saved_blks += compStat.st_compressed_blocks;
-		}
-	}
-
-	if (compStat.in_commit)
-		sbi->sec_heimdallfs_stat = heimdallfs_stat;
-
-	if (copy_to_user((struct f2fs_sec_stat_compfile __user *)arg, &compStat,
-				sizeof(compStat)))
-		return -EFAULT;
-
-	return 0;
-}
-
 static int f2fs_get_compress_blocks(struct file *filp, unsigned long arg)
 {
 	struct inode *inode = file_inode(filp);
@@ -4456,10 +4391,6 @@ static long __f2fs_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 		return f2fs_ioc_decompress_file(filp);
 	case F2FS_IOC_COMPRESS_FILE:
 		return f2fs_ioc_compress_file(filp);
-	case F2FS_IOC_GET_VALID_NODE_COUNT:
-		return f2fs_ioc_get_valid_node_count(filp, arg);
-	case F2FS_IOC_STAT_COMPRESS_FILE:
-		return f2fs_ioc_stat_compress_file(filp, arg);
 #ifdef CONFIG_FSCRYPT_SDP
 	case FS_IOC_GET_SDP_INFO:
 	case FS_IOC_SET_SDP_POLICY:
@@ -4826,7 +4757,6 @@ long f2fs_compat_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 	case F2FS_IOC_DECOMPRESS_FILE:
 	case F2FS_IOC_COMPRESS_FILE:
 	case F2FS_IOC_GET_VALID_NODE_COUNT:
-	case F2FS_IOC_STAT_COMPRESS_FILE:
 #ifdef CONFIG_FSCRYPT_SDP
 	case FS_IOC_GET_SDP_INFO:
 	case FS_IOC_SET_SDP_POLICY:

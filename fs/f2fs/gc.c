@@ -1843,7 +1843,6 @@ int f2fs_gc(struct f2fs_sb_info *sbi, struct f2fs_gc_control *gc_control)
 				reserved_segments(sbi),
 				prefree_segments(sbi));
 
-	gc_start_time = local_clock();
 	/* W/A for FG_GC failure due to Atomic Write File and Pinned File */
 	memset(DIRTY_I(sbi)->blacklist_victim_secmap, 0,
 					f2fs_bitmap_size(MAIN_SECS(sbi)));
@@ -1943,8 +1942,6 @@ stop:
 
 	if (gc_type == FG_GC)
 		f2fs_unpin_all_sections(sbi, true);
-		
-	gc_end_time = local_clock();
 
 	trace_f2fs_gc_end(sbi->sb, ret, total_freed, sec_freed,
 				get_pages(sbi, F2FS_DIRTY_NODES),
@@ -1956,7 +1953,6 @@ stop:
 				prefree_segments(sbi));
 
 	sbi->sec_stat.gc_count[gc_type]++;
-	f2fs_update_gc_total_time(sbi, gc_start_time, gc_end_time, gc_type);
 	f2fs_up_write(&sbi->gc_lock);
 
 	put_gc_inode(&gc_list);

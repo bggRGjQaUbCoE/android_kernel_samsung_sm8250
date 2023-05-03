@@ -156,6 +156,18 @@ extern int fscrypt_ioctl_get_nonce(struct file *filp, void __user *arg);
 extern int fscrypt_has_permitted_context(struct inode *, struct inode *);
 extern int fscrypt_inherit_context(struct inode *, struct inode *,
 					void *, bool);
+
+struct fscrypt_dummy_context {
+	const union fscrypt_context *ctx;
+};
+
+static inline void
+fscrypt_free_dummy_context(struct fscrypt_dummy_context *dummy_ctx)
+{
+	kfree(dummy_ctx->ctx);
+	dummy_ctx->ctx = NULL;
+}
+
 /* keyring.c */
 extern void fscrypt_sb_free(struct super_block *sb);
 extern int fscrypt_ioctl_add_key(struct file *filp, void __user *arg);
@@ -872,3 +884,5 @@ static inline void fscrypt_finalize_bounce_page(struct page **pagep)
 	}
 }
 #endif	/* _LINUX_FSCRYPT_H */
+
+

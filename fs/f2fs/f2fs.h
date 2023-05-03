@@ -186,16 +186,17 @@ struct f2fs_mount_info {
 	int fs_mode;			/* fs mode: LFS or ADAPTIVE */
 	int bggc_mode;			/* bggc mode: off, on or sync */
 	int memory_mode;		/* memory mode */
+	bool test_dummy_encryption;	/* test dummy encryption */
+#ifdef CONFIG_FS_ENCRYPTION
+	bool inlinecrypt;		/* inline encryption enabled */
+#endif
 	int discard_unit;		/*
 					 * discard command's offset/size should
 					 * be aligned to this unit: block,
 					 * segment or section
 					 */
-	bool test_dummy_encryption;	/* test dummy encryption */
+	struct fscrypt_dummy_context dummy_enc_ctx; /* test dummy encryption */
 	block_t unusable_cap_perc;	/* percentage for cap */
-#ifdef CONFIG_FS_ENCRYPTION
-	bool inlinecrypt;		/* inline encryption enabled */
-#endif
 	block_t unusable_cap;		/* Amount of space allowed to be
 					 * unusable when disabling checkpoint
 					 */
@@ -359,6 +360,7 @@ struct discard_entry {
 /* minimum discard granularity, unit: block count */
 #define MIN_DISCARD_GRANULARITY		1
 /* default discard granularity of inner discard thread, unit: block count */
+// P190708-00895
 #define DEFAULT_DISCARD_GRANULARITY		16
 /* default maximum discard granularity of ordered discard, unit: block count */
 #define DEFAULT_MAX_ORDERED_DISCARD_GRANULARITY	16
@@ -1961,6 +1963,29 @@ struct f2fs_sb_info {
 	struct kmem_cache *inline_xattr_slab;	/* inline xattr entry */
 	unsigned int inline_xattr_slab_size;	/* default inline xattr slab size */
 
+	unsigned int sec_hqm_preserve;
+	struct f2fs_sec_stat_info sec_stat;
+	struct f2fs_sec_fsck_info sec_fsck_stat;
+
+	struct f2fs_sec_heimdallfs_stat sec_heimdallfs_stat;
+
+	/* To gather information of fragmentation */
+	unsigned int s_sec_part_best_extents;
+	unsigned int s_sec_part_current_extents;
+	unsigned int s_sec_part_score;
+	unsigned int s_sec_defrag_writes_kb;
+	unsigned int s_sec_num_apps;
+	unsigned int s_sec_capacity_apps_kb;
+
+	unsigned int s_sec_cond_fua_mode;
+
+#ifdef CONFIG_F2FS_SEC_BLOCK_OPERATIONS_DEBUG
+	unsigned int s_sec_blkops_total;
+	unsigned long long s_sec_blkops_max_elapsed;
+	struct f2fs_sec_blkops_dbg s_sec_dbg_entries[F2FS_SEC_BLKOPS_ENTRIES];
+	struct f2fs_sec_blkops_dbg s_sec_dbg_max_entry;
+#endif
+
 	/* For reclaimed segs statistics per each GC mode */
 	unsigned int gc_segment_mode;		/* GC state for reclaimed segments */
 	unsigned int gc_reclaimed_segs[MAX_GC_MODE];	/* Reclaimed segs for each mode */
@@ -2002,29 +2027,6 @@ struct f2fs_sb_info {
 	/* For io latency related statistics info in one iostat period */
 	spinlock_t iostat_lat_lock;
 	struct iostat_lat_info *iostat_io_lat;
-#endif
-
-	unsigned int sec_hqm_preserve;
-	struct f2fs_sec_stat_info sec_stat;
-	struct f2fs_sec_fsck_info sec_fsck_stat;
-
-	struct f2fs_sec_heimdallfs_stat sec_heimdallfs_stat;
-
-	/* To gather information of fragmentation */
-	unsigned int s_sec_part_best_extents;
-	unsigned int s_sec_part_current_extents;
-	unsigned int s_sec_part_score;
-	unsigned int s_sec_defrag_writes_kb;
-	unsigned int s_sec_num_apps;
-	unsigned int s_sec_capacity_apps_kb;
-
-	unsigned int s_sec_cond_fua_mode;
-
-#ifdef CONFIG_F2FS_SEC_BLOCK_OPERATIONS_DEBUG
-	unsigned int s_sec_blkops_total;
-	unsigned long long s_sec_blkops_max_elapsed;
-	struct f2fs_sec_blkops_dbg s_sec_dbg_entries[F2FS_SEC_BLKOPS_ENTRIES];
-	struct f2fs_sec_blkops_dbg s_sec_dbg_max_entry;
 #endif
 };
 
@@ -3960,12 +3962,6 @@ void f2fs_destroy_node_manager(struct f2fs_sb_info *sbi);
 int __init f2fs_create_node_manager_caches(void);
 void f2fs_destroy_node_manager_caches(void);
 
-static inline int f2fs_get_node_info(struct f2fs_sb_info *sbi, nid_t nid,
-						struct node_info *ni)
-{
-	return __f2fs_get_node_info(sbi, nid, ni, 0);
-}
-
 /*
  * segment.c
  */
@@ -4981,4 +4977,5 @@ static inline bool f2fs_is_readonly(struct f2fs_sb_info *sbi)
 
 #define EFSBADCRC	EBADMSG		/* Bad CRC detected */
 #define EFSCORRUPTED	EUCLEAN		/* Filesystem is corrupted */
+
 

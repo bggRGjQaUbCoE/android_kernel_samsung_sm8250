@@ -571,13 +571,6 @@ retry:
 		return 0;
 	}
 
-	//readahead && cp_mutex locked?
-	if (unlikely((op_flags & REQ_RAHEAD) &&
-				mutex_is_locked(&sbi->cp_mutex))) {
-		up_read(&nm_i->nat_tree_lock);
-		return -EBUSY;
-	}
-
 	/*
 	 * Check current segment summary by trying to grab journal_rwsem first.
 	 * This sem is on the critical path on the checkpoint requiring the above

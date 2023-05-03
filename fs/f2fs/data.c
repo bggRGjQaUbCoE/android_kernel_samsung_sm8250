@@ -68,8 +68,6 @@ static bool __is_cp_guaranteed(struct page *page)
 		return false;
 	if ((S_ISREG(inode->i_mode) && IS_NOQUOTA(inode)) ||
 			page_private_gcing(page))
-			IS_ATOMIC_WRITTEN_PAGE(page))) ||
-			is_cold_data(page))
 		return true;
 	return false;
 }
@@ -607,31 +605,6 @@ static void __f2fs_submit_read_bio(struct f2fs_sb_info *sbi,
 		}
 	}
 	f2fs_submit_write_bio(sbi, bio, type);
-}
-
-static void f2fs_submit_write_bio(struct f2fs_sb_info *sbi, struct bio *bio,
-				  enum page_type type)
-{
-	WARN_ON_ONCE(is_read_io(bio_op(bio)));
-
-	if (type == DATA || type == NODE) {
-		if (f2fs_lfs_mode(sbi) && current->plug)
-			blk_finish_plug(current->plug);
-
-		if (F2FS_IO_ALIGNED(sbi)) {
-			f2fs_align_write_bio(sbi, bio);
-			/*
-			 * In the NODE case, we lose next block address chain.
-			 * So, we need to do checkpoint in f2fs_sync_file.
-			 */
-			if (type == NODE)
-				set_sbi_flag(sbi, SBI_NEED_CP);
-		}
-	}
-
-	trace_f2fs_submit_write_bio(sbi->sb, type, bio);
-	iostat_update_submit_ctx(bio, type);
-	submit_bio(bio);
 }
 
 static void __submit_merged_bio(struct f2fs_bio_info *io)

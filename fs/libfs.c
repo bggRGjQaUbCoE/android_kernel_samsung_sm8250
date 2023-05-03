@@ -1385,33 +1385,31 @@ static const struct dentry_operations generic_encrypted_ci_dentry_ops = {
  * This function sets the dentry ops for the given dentry to handle both
  * casefolding and encryption of the dentry name.
  */
-void generic_set_encrypted_ci_d_ops(struct inode *dir, struct dentry *dentry)
+void generic_set_encrypted_ci_d_ops(struct dentry *dentry)
 {
 #ifdef CONFIG_FS_ENCRYPTION
-	if (dentry->d_flags & DCACHE_ENCRYPTED_NAME) {
-#ifdef CONFIG_UNICODE
-		if (dir->i_sb->s_encoding) {
-			d_set_d_op(dentry, &generic_encrypted_ci_dentry_ops);
-			return;
-		}
+	bool needs_encrypt_ops = dentry->d_flags & DCACHE_NOKEY_NAME;
 #endif
+#ifdef CONFIG_UNICODE
+	bool needs_ci_ops = dentry->d_sb->s_encoding;
+#endif
+#if defined(CONFIG_FS_ENCRYPTION) && defined(CONFIG_UNICODE)
+	if (needs_encrypt_ops && needs_ci_ops) {
+		d_set_d_op(dentry, &generic_encrypted_ci_dentry_ops);
+		return;
+	}
+#endif
+#ifdef CONFIG_FS_ENCRYPTION
+	if (needs_encrypt_ops) {
 		d_set_d_op(dentry, &generic_encrypted_dentry_ops);
 		return;
 	}
 #endif
 #ifdef CONFIG_UNICODE
-	if (dir->i_sb->s_encoding) {
+	if (needs_ci_ops) {
 		d_set_d_op(dentry, &generic_ci_dentry_ops);
-		return;
-	}
-#endif
-#ifdef CONFIG_FSCRYPT_SDP
-	if (dir->i_crypt_info) {
-		d_set_d_op(dentry, &sdp_dentry_ops);
 		return;
 	}
 #endif
 }
 EXPORT_SYMBOL(generic_set_encrypted_ci_d_ops);
-
-
