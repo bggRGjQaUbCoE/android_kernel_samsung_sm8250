@@ -30,11 +30,6 @@
 #include "gc.h"
 #include "trace.h"
 #include <trace/events/f2fs.h>
-#include <trace/events/android_fs.h>
-
-#ifdef CONFIG_FSCRYPT_SDP
-#include <linux/fscrypto_sdp_ioctl.h>
-#endif
 
 static vm_fault_t f2fs_filemap_fault(struct vm_fault *vmf)
 {
@@ -203,8 +198,6 @@ static inline enum cp_reason_type need_do_checkpoint(struct inode *inode)
 							TRANS_DIR_INO))
 		cp_reason = CP_RECOVER_DIR;
 
-	sbi->sec_stat.cpr_cnt[cp_reason]++;
-
 	return cp_reason;
 }
 
@@ -233,21 +226,6 @@ static void try_to_fix_pino(struct inode *inode)
 	up_write(&fi->i_sem);
 }
 
-/* P190723-05556 */
-static inline bool should_issue_flush(struct f2fs_sb_info *sbi)
-{
-	if (F2FS_OPTION(sbi).fsync_mode != FSYNC_MODE_NOBARRIER)
-		return true;
-
-	if (uid_eq(make_kuid(&init_user_ns, F2FS_DEF_RESUID), current_fsuid()))
-		return true;
-
-	if (in_group_p(F2FS_OPTION(sbi).flush_group))
-		return true;
-
-	return false;
-}
-
 static int f2fs_do_sync_file(struct file *file, loff_t start, loff_t end,
 						int datasync, bool atomic)
 {
@@ -269,20 +247,8 @@ static int f2fs_do_sync_file(struct file *file, loff_t start, loff_t end,
 
 	trace_f2fs_sync_file_enter(inode);
 
-	if (trace_android_fs_fsync_start_enabled()) {
-		char *path, pathbuf[MAX_TRACE_PATHBUF_LEN];
-
-		path = android_fstrace_get_pathname(pathbuf,
-				MAX_TRACE_PATHBUF_LEN, inode);
-		trace_android_fs_fsync_start(inode,
-				current->pid, path, current->comm);
-	}
-
 	if (S_ISDIR(inode->i_mode))
 		goto go_write;
-
-	sbi->sec_stat.fsync_count++;
-	sbi->sec_stat.fsync_dirty_pages += get_dirty_pages(inode);
 
 	/* if fdatasync is triggered, let's do in-place-update */
 	if (datasync || get_dirty_pages(inode) <= SM_I(sbi)->min_fsync_blocks)
@@ -336,7 +302,6 @@ go_write:
 		try_to_fix_pino(inode);
 		clear_inode_flag(inode, FI_APPEND_WRITE);
 		clear_inode_flag(inode, FI_UPDATE_WRITE);
-		sbi->sec_stat.cp_cnt[STAT_CP_FSYNC]++;
 		goto out;
 	}
 sync_nodes:
@@ -376,7 +341,7 @@ sync_nodes:
 	f2fs_remove_ino_entry(sbi, ino, APPEND_INO);
 	clear_inode_flag(inode, FI_APPEND_WRITE);
 flush_out:
-	if (!atomic && should_issue_flush(sbi))
+	if (!atomic && F2FS_OPTION(sbi).fsync_mode != FSYNC_MODE_NOBARRIER)
 		ret = f2fs_issue_flush(sbi, inode->i_ino);
 	if (!ret) {
 		f2fs_remove_ino_entry(sbi, ino, UPDATE_INO);
@@ -387,8 +352,6 @@ flush_out:
 out:
 	trace_f2fs_sync_file_exit(inode, cp_reason, datasync, ret);
 	f2fs_trace_ios(NULL, 1);
-	trace_android_fs_fsync_end(inode, start, end - start);
-
 	return ret;
 }
 
@@ -797,10 +760,6 @@ int f2fs_truncate(struct inode *inode)
 		return -EIO;
 	}
 
-	err = dquot_initialize(inode);
-	if (err)
-		return err;
-
 	/* we should check inline_data size */
 	if (!f2fs_may_inline_data(inode)) {
 		err = f2fs_convert_inline_inode(inode);
@@ -882,8 +841,7 @@ static void __setattr_copy(struct inode *inode, const struct iattr *attr)
 	if (ia_valid & ATTR_MODE) {
 		umode_t mode = attr->ia_mode;
 
-		if (!in_group_p(inode->i_gid) &&
-			!capable_wrt_inode_uidgid(inode, CAP_FSETID))
+		if (!in_group_p(inode->i_gid) && !capable(CAP_FSETID))
 			mode &= ~S_ISGID;
 		set_acl_inode(inode, mode);
 	}
@@ -988,12 +946,6 @@ int f2fs_setattr(struct dentry *dentry, struct iattr *attr)
 			inode->i_mode = F2FS_I(inode)->i_acl_mode;
 			clear_inode_flag(inode, FI_ACL_MODE);
 		}
-#ifdef CONFIG_FS_HPB
-		if (__is_hpb_file(dentry->d_name.name, inode))
-			set_inode_flag(inode, FI_HPB_INODE);
-		else
-			clear_inode_flag(inode, FI_HPB_INODE);
-#endif
 	}
 
 	/* file size may changed here */
@@ -1108,6 +1060,7 @@ static int punch_hole(struct inode *inode, loff_t offset, loff_t len)
 		}
 
 		if (pg_start < pg_end) {
+			struct address_space *mapping = inode->i_mapping;
 			loff_t blk_start, blk_end;
 			struct f2fs_sb_info *sbi = F2FS_I_SB(inode);
 
@@ -1119,7 +1072,8 @@ static int punch_hole(struct inode *inode, loff_t offset, loff_t len)
 			down_write(&F2FS_I(inode)->i_gc_rwsem[WRITE]);
 			down_write(&F2FS_I(inode)->i_mmap_sem);
 
-			truncate_pagecache_range(inode, blk_start, blk_end - 1);
+			truncate_inode_pages_range(mapping, blk_start,
+					blk_end - 1);
 
 			f2fs_lock_op(sbi);
 			ret = f2fs_truncate_hole(inode, pg_start, pg_end);
@@ -1693,11 +1647,7 @@ next_alloc:
 
 		down_write(&sbi->pin_sem);
 		map.m_seg_type = CURSEG_COLD_DATA_PINNED;
-
-		f2fs_lock_op(sbi);
 		f2fs_allocate_new_segments(sbi, CURSEG_COLD_DATA);
-		f2fs_unlock_op(sbi);
-
 		err = f2fs_map_blocks(inode, &map, 1, F2FS_GET_BLOCK_PRE_DIO);
 		up_write(&sbi->pin_sem);
 
@@ -1840,15 +1790,12 @@ static int f2fs_file_flush(struct file *file, fl_owner_t id)
 static int f2fs_setflags_common(struct inode *inode, u32 iflags, u32 mask)
 {
 	struct f2fs_inode_info *fi = F2FS_I(inode);
-	u32 masked_flags = fi->i_flags & mask;
-
-	f2fs_bug_on(F2FS_I_SB(inode), (iflags & ~mask));
 
 	/* Is it quota file? Do not allow user to mess with it */
 	if (IS_NOQUOTA(inode))
 		return -EPERM;
 
-	if ((iflags ^ masked_flags) & F2FS_CASEFOLD_FL) {
+	if ((iflags ^ fi->i_flags) & F2FS_CASEFOLD_FL) {
 		if (!f2fs_sb_has_casefold(F2FS_I_SB(inode)))
 			return -EOPNOTSUPP;
 		if (!f2fs_empty_dir(inode))
@@ -1862,9 +1809,9 @@ static int f2fs_setflags_common(struct inode *inode, u32 iflags, u32 mask)
 			return -EINVAL;
 	}
 
-	if ((iflags ^ masked_flags) & F2FS_COMPR_FL) {
+	if ((iflags ^ fi->i_flags) & F2FS_COMPR_FL) {
 		if (S_ISREG(inode->i_mode) &&
-			(masked_flags & F2FS_COMPR_FL || i_size_read(inode) ||
+			(fi->i_flags & F2FS_COMPR_FL || i_size_read(inode) ||
 						F2FS_HAS_BLOCKS(inode)))
 			return -EINVAL;
 		if (iflags & F2FS_NOCOMP_FL)
@@ -1877,14 +1824,12 @@ static int f2fs_setflags_common(struct inode *inode, u32 iflags, u32 mask)
 
 			if (!f2fs_may_compress(inode))
 				return -EINVAL;
-			if (S_ISREG(inode->i_mode) && inode->i_size)
-				return -EINVAL;
 
 			set_compress_context(inode);
 		}
 	}
-	if ((iflags ^ masked_flags) & F2FS_NOCOMP_FL) {
-		if (masked_flags & F2FS_COMPR_FL)
+	if ((iflags ^ fi->i_flags) & F2FS_NOCOMP_FL) {
+		if (fi->i_flags & F2FS_COMPR_FL)
 			return -EINVAL;
 	}
 
@@ -2481,14 +2426,6 @@ static int f2fs_ioc_get_encryption_key_status(struct file *filp,
 	return fscrypt_ioctl_get_key_status(filp, (void __user *)arg);
 }
 
-static int f2fs_ioc_get_encryption_nonce(struct file *filp, unsigned long arg)
-{
-	if (!f2fs_sb_has_encrypt(F2FS_I_SB(file_inode(filp))))
-		return -EOPNOTSUPP;
-
-	return fscrypt_ioctl_get_nonce(filp, (void __user *)arg);
-}
-
 static int f2fs_ioc_gc(struct file *filp, unsigned long arg)
 {
 	struct inode *inode = file_inode(filp);
@@ -2813,9 +2750,6 @@ static int f2fs_move_file_range(struct file *file_in, loff_t pos_in,
 
 	if (IS_ENCRYPTED(src) || IS_ENCRYPTED(dst))
 		return -EOPNOTSUPP;
-
-	if (pos_out < 0 || pos_in < 0)
-		return -EINVAL;
 
 	if (src == dst) {
 		if (pos_in == pos_out)
@@ -3462,60 +3396,6 @@ out:
 	return err;
 }
 
-static int f2fs_ioc_get_valid_node_count(struct file *filp, unsigned long arg)
-{
-	struct f2fs_sb_info *sbi = F2FS_I_SB(file_inode(filp));
-	u32 node_count = (u32)valid_node_count(sbi);
-
-	return put_user(node_count, (u32 __user *)arg);
-}
-
-static int f2fs_ioc_stat_compress_file(struct file *filp, unsigned long arg)
-{
-	static struct f2fs_sec_heimdallfs_stat heimdallfs_stat;
-	struct inode *inode = file_inode(filp);
-	struct f2fs_sb_info *sbi = F2FS_I_SB(inode);
-	struct f2fs_sec_stat_compfile compStat;
-
-	if (!f2fs_sb_has_compression(F2FS_I_SB(inode)))
-		return -EOPNOTSUPP;
-
-	if (copy_from_user(&compStat, (struct f2fs_sec_stat_compfile __user *)arg,
-				sizeof(compStat)))
-		return -EFAULT;
-
-	compStat.st_blocks = inode->i_blocks;
-	if (unlikely(f2fs_compressed_file(inode))) {
-		compStat.st_compressed_blocks = F2FS_I(inode)->i_compr_blocks;
-		compStat.out_compressed = 1;
-	} else {
-		compStat.out_compressed = 0;
-	}
-
-	if (compStat.in_init)
-		memset(&heimdallfs_stat, 0x0, sizeof(heimdallfs_stat));
-
-	if (compStat.in_scan) {
-		heimdallfs_stat.nr_pkgs++;
-		heimdallfs_stat.nr_pkg_blks += compStat.st_blocks;
-
-		if (unlikely(f2fs_compressed_file(inode))) {
-			heimdallfs_stat.nr_comp_pkgs++;
-			heimdallfs_stat.nr_comp_pkg_blks += compStat.st_blocks;
-			heimdallfs_stat.nr_comp_saved_blks += compStat.st_compressed_blocks;
-		}
-	}
-
-	if (compStat.in_commit)
-		sbi->sec_heimdallfs_stat = heimdallfs_stat;
-
-	if (copy_to_user((struct f2fs_sec_stat_compfile __user *)arg, &compStat,
-				sizeof(compStat)))
-		return -EFAULT;
-
-	return 0;
-}
-
 long f2fs_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 {
 	if (unlikely(f2fs_cp_error(F2FS_I_SB(file_inode(filp)))))
@@ -3560,8 +3440,6 @@ long f2fs_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 		return f2fs_ioc_remove_encryption_key_all_users(filp, arg);
 	case FS_IOC_GET_ENCRYPTION_KEY_STATUS:
 		return f2fs_ioc_get_encryption_key_status(filp, arg);
-	case FS_IOC_GET_ENCRYPTION_NONCE:
-		return f2fs_ioc_get_encryption_nonce(filp, arg);
 	case F2FS_IOC_GARBAGE_COLLECT:
 		return f2fs_ioc_gc(filp, arg);
 	case F2FS_IOC_GARBAGE_COLLECT_RANGE:
@@ -3596,26 +3474,6 @@ long f2fs_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 		return f2fs_get_volume_name(filp, arg);
 	case F2FS_IOC_SET_VOLUME_NAME:
 		return f2fs_set_volume_name(filp, arg);
-	case F2FS_IOC_GET_VALID_NODE_COUNT:
-		return f2fs_ioc_get_valid_node_count(filp, arg);
-	case F2FS_IOC_STAT_COMPRESS_FILE:
-		return f2fs_ioc_stat_compress_file(filp, arg);
-#ifdef CONFIG_FSCRYPT_SDP
-	case FS_IOC_GET_SDP_INFO:
-	case FS_IOC_SET_SDP_POLICY:
-	case FS_IOC_SET_SENSITIVE:
-	case FS_IOC_SET_PROTECTED:
-	case FS_IOC_ADD_CHAMBER:
-	case FS_IOC_REMOVE_CHAMBER:
-	case FS_IOC_DUMP_FILE_KEY:
-		return fscrypt_sdp_ioctl(filp, cmd, arg);
-#endif
-#ifdef CONFIG_DDAR
-	case F2FS_IOC_GET_DD_POLICY:
-	case F2FS_IOC_SET_DD_POLICY:
-	case FS_IOC_GET_DD_INODE_COUNT:
-		return fscrypt_dd_ioctl(cmd, &arg, file_inode(filp));
-#endif
 	default:
 		return -ENOTTY;
 	}
@@ -3755,7 +3613,6 @@ long f2fs_compat_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 	case FS_IOC_REMOVE_ENCRYPTION_KEY:
 	case FS_IOC_REMOVE_ENCRYPTION_KEY_ALL_USERS:
 	case FS_IOC_GET_ENCRYPTION_KEY_STATUS:
-	case FS_IOC_GET_ENCRYPTION_NONCE:
 	case F2FS_IOC_GARBAGE_COLLECT:
 	case F2FS_IOC_GARBAGE_COLLECT_RANGE:
 	case F2FS_IOC_WRITE_CHECKPOINT:
@@ -3773,22 +3630,6 @@ long f2fs_compat_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 	case FS_IOC_MEASURE_VERITY:
 	case F2FS_IOC_GET_VOLUME_NAME:
 	case F2FS_IOC_SET_VOLUME_NAME:
-	case F2FS_IOC_GET_VALID_NODE_COUNT:
-	case F2FS_IOC_STAT_COMPRESS_FILE:
-#ifdef CONFIG_FSCRYPT_SDP
-	case FS_IOC_GET_SDP_INFO:
-	case FS_IOC_SET_SDP_POLICY:
-	case FS_IOC_SET_SENSITIVE:
-	case FS_IOC_SET_PROTECTED:
-	case FS_IOC_ADD_CHAMBER:
-	case FS_IOC_REMOVE_CHAMBER:
-	case FS_IOC_DUMP_FILE_KEY:
-#endif
-#ifdef CONFIG_DDAR
-	case F2FS_IOC_GET_DD_POLICY:
-	case F2FS_IOC_SET_DD_POLICY:
-	case FS_IOC_GET_DD_INODE_COUNT:
-#endif
 		break;
 	default:
 		return -ENOIOCTLCMD;
