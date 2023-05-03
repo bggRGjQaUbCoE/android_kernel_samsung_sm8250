@@ -27,7 +27,7 @@
 #include <linux/zstd.h>
 #include <linux/lz4.h>
 #include <linux/iversion.h>
-#include <linux/cleancache.h>s
+#include <linux/cleancache.h>
 
 #include "f2fs.h"
 #include "node.h"
@@ -3132,7 +3132,6 @@ static int sanity_check_raw_super(struct f2fs_sb_info *sbi,
 		return -EINVAL;
 	}
 
-sanity_check_raw_super())
 	/* Currently, support only 4KB block size */
 	if (le32_to_cpu(raw_super->log_blocksize) != F2FS_BLKSIZE_BITS) {
 		f2fs_info(sbi, "Invalid log_blocksize (%u), supports only %u",
