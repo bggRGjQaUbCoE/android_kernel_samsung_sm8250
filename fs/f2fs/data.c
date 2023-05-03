@@ -267,7 +267,7 @@ static void f2fs_post_read_work(struct work_struct *work)
 
 static void f2fs_read_end_io(struct bio *bio)
 {
-	struct f2fs_sb_info *sbi = F2FS_P_SB(first_page);
+	struct f2fs_sb_info *sbi = F2FS_P_SB(bio_first_page_all(bio));
 	struct bio_post_read_ctx *ctx;
 	bool intask = in_task();
 
@@ -346,7 +346,7 @@ static void f2fs_write_end_io(struct bio *bio)
 						STOP_CP_REASON_WRITE_FAIL);
 		}
 
-		f2fs_bug_on_endio(sbi, page->mapping == NODE_MAPPING(sbi) &&
+		f2fs_bug_on(sbi, page->mapping == NODE_MAPPING(sbi) &&
 					page->index != nid_of_node(page));
 
 		dec_page_count(sbi, type);
@@ -697,9 +697,6 @@ int f2fs_submit_page_bio(struct f2fs_io_info *fio)
 	/* Allocate a new bio */
 	bio = __bio_alloc(fio, 1);
 
-	f2fs_set_bio_crypt_ctx(bio, fio->page->mapping->host,
-			       fio->page->index, fio, GFP_NOIO);
-
 	if (bio_add_page(bio, page, PAGE_SIZE, 0) < PAGE_SIZE) {
 		bio_put(bio);
 		return -EFAULT;
@@ -903,9 +900,6 @@ int f2fs_merge_page_bio(struct f2fs_io_info *fio)
 alloc_new:
 	if (!bio) {
 		bio = __bio_alloc(fio, BIO_MAX_PAGES);
-		f2fs_set_bio_crypt_ctx(bio, fio->page->mapping->host,
-				       fio->page->index, fio,
-				       GFP_NOIO);
 
 		add_bio_entry(fio->sbi, bio, page, fio->temp);
 	} else {
@@ -965,9 +959,7 @@ next:
 
 	if (io->bio &&
 	    (!io_is_mergeable(sbi, io->bio, io, fio, io->last_block_in_bio,
-			      fio->new_blkaddr) ||
-	     !f2fs_crypt_mergeable_bio(io->bio, fio->page->mapping->host,
-				       fio->page->index, fio)))
+			      fio->new_blkaddr)))
 		__submit_merged_bio(io);
 
 alloc_new:
@@ -980,9 +972,6 @@ alloc_new:
 			goto skip;
 		}
 		io->bio = __bio_alloc(fio, BIO_MAX_PAGES);
-		f2fs_set_bio_crypt_ctx(io->bio, fio->page->mapping->host,
-				       fio->page->index, fio,
-				       GFP_NOIO);
 		io->fio = *fio;
 	}
 
@@ -1025,8 +1014,6 @@ static struct bio *f2fs_grab_read_bio(struct inode *inode, block_t blkaddr,
 	bio_set_op_attrs(bio, REQ_OP_READ, op_flag);
 	if (!bio)
 		return ERR_PTR(-ENOMEM);
-
-	f2fs_set_bio_crypt_ctx(bio, inode, first_idx, NULL, GFP_NOFS);
 
 	bio->bi_iter.bi_sector = sector;
 	bio->bi_end_io = f2fs_read_end_io;
@@ -2164,8 +2151,7 @@ zero_out:
 	 * BIO off first?
 	 */
 	if (bio && (!page_is_mergeable(F2FS_I_SB(inode), bio,
-				       *last_block_in_bio, block_nr) ||
-		    !f2fs_crypt_mergeable_bio(bio, inode, page->index, NULL))) {
+				       *last_block_in_bio, block_nr))) {
 submit_and_realloc:
 		f2fs_submit_read_bio(F2FS_I_SB(inode), bio, DATA);
 		bio = NULL;
@@ -2322,8 +2308,8 @@ skip_reading_dnode:
 		}
 		
 		if (bio && (!page_is_mergeable(sbi, bio,
-					*last_block_in_bio, blkaddr) ||
-		    !f2fs_crypt_mergeable_bio(bio, inode, page->index, NULL))) {
+					*last_block_in_bio, blkaddr)) {
+{
 submit_and_realloc:
 			f2fs_submit_read_bio(sbi, bio, DATA);
 			bio = NULL;
