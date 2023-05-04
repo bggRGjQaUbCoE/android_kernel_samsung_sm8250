@@ -240,7 +240,7 @@ config TOUCHSCREEN_DUMP_MODE
 config SEC_INPUT_BOOSTER
 	bool "SEC INPUT BOOSTER"
 	depends on INPUT_EVDEV
-	default y
+	default n
 	help
 	  Say Y here if you need to enable Input Booster.
 
