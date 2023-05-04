@@ -14,6 +14,8 @@ export SUBARCH=arm64
 
 make -j12 CC=clang O=out vendor/lineage_y2qdcmw_defconfig
 
+cp -r out/.config arch/arm64/configs/vendor/lineage_y2qdcmw_defconfig
+
 # make -j12 CC=clang O=out menuconfig
 
 # make -j12 CC=clang O=out
