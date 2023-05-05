@@ -18,4 +18,4 @@ cp -r out/.config arch/arm64/configs/vendor/lineage_y2qdcmw_defconfig
 
 # make -j12 CC=clang O=out menuconfig
 
-# make -j12 CC=clang O=out
+# make -j$(nproc --all) CC=clang O=out
