@@ -198,10 +198,7 @@ int f2fs_start_gc_thread(struct f2fs_sb_info *sbi)
 		sbi->gc_thread = NULL;
 		return err;
 	}
-out:
-
 	return 0;
-
 }
 
 void f2fs_stop_gc_thread(struct f2fs_sb_info *sbi)
