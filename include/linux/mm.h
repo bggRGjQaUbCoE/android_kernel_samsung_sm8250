@@ -779,6 +779,12 @@ static inline void set_compound_order(struct page *page, unsigned int order)
 
 void free_compound_page(struct page *page);
 
+/* Returns the number of pages in this potentially compound page. */
+static inline unsigned long compound_nr(struct page *page)
+{
+	return 1UL << compound_order(page);
+}
+
 #ifdef CONFIG_MMU
 /*
  * Do pte_mkwrite, but only if the vma says VM_WRITE.  We do this when
