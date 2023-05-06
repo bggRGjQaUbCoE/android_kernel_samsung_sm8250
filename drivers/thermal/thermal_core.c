@@ -24,10 +24,6 @@
 #include <linux/suspend.h>
 #include <linux/cpu_cooling.h>
 
-#ifdef CONFIG_DRM
-#include <drm/drm_notifier_mi.h>
-#endif
-
 #define CREATE_TRACE_POINTS
 #include <trace/events/thermal.h>
 
@@ -2058,54 +2054,6 @@ static void destroy_thermal_message_node(void)
 	device_unregister(&thermal_message_dev);
 }
 
-#ifdef CONFIG_DRM
-static const char *get_screen_state_name(int mode)
-{
-	switch (mode) {
-	case MI_DRM_BLANK_UNBLANK:
-		return "On";
-	case MI_DRM_BLANK_LP1:
-		return "Doze";
-	case MI_DRM_BLANK_LP2:
-		return "DozeSuspend";
-	case MI_DRM_BLANK_POWERDOWN:
-		return "Off";
-	default:
-		return "Unknown";
-    }
-}
-
-static int screen_state_for_thermal_callback(struct notifier_block *nb,
-		unsigned long val, void *data)
-{
-	struct mi_drm_notifier *evdata = data;
-	unsigned int blank;
-
-	if (val != MI_DRM_EVENT_BLANK || !evdata || !evdata->data)
-		return 0;
-
-	blank = *(int *)(evdata->data);
-	switch (blank) {
-	case MI_DRM_BLANK_UNBLANK:
-		sm.screen_state = 1;
-		break;
-	case MI_DRM_BLANK_LP1:
-	case MI_DRM_BLANK_LP2:
-	case MI_DRM_BLANK_POWERDOWN:
-		sm.screen_state = 0;
-		break;
-	default:
-		break;
-	}
-
-	pr_warn("%s: %s, sm.screen_state = %d\n", __func__, get_screen_state_name(blank),
-			sm.screen_state);
-	sysfs_notify(&thermal_message_dev.kobj, NULL, "screen_state");
-
-	return NOTIFY_OK;
-}
-#endif
-
 static int __init thermal_init(void)
 {
 	int result;
@@ -2145,15 +2093,6 @@ static int __init thermal_init(void)
 	if (result)
 		pr_warn("Thermal: create thermal message node failed, return %d\n",
 			result);
-
-#ifdef CONFIG_DRM
-	sm.thermal_notifier.notifier_call = screen_state_for_thermal_callback;
-	if (mi_drm_register_client(&sm.thermal_notifier) < 0) {
-		pr_warn("Thermal: register screen state callback failed\n");
-	}
-#endif
-
-
 
 #if defined(CONFIG_SEC_PM)
 	INIT_DELAYED_WORK(&cdev_print_work, cdev_print);

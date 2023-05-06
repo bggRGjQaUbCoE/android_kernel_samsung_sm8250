@@ -6501,6 +6501,7 @@ static inline int
 schedtune_cpu_margin(unsigned long util, int cpu)
 {
 	int boost = schedtune_cpu_boost(cpu);
+	long margin;
 
 	if (boost == 0)
 		margin = 0;
@@ -8225,7 +8226,7 @@ static int find_energy_efficient_cpu(struct task_struct *p, int prev_cpu,
 #else
 	bool prefer_high_cap = boosted;
 #endif
-	int start_cpu = get_start_cpu(p, sync_boost);
+	int start_cpu = get_start_cpu(p);
 
 	if (start_cpu < 0)
 		goto eas_not_ready;
