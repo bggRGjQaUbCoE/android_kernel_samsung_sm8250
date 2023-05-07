@@ -177,13 +177,7 @@ static FORCE_INLINE int __LZ4_decompress_generic(
 	const BYTE * const iend = src + srcSize;
 
 	BYTE * const oend = dst + outputSize;
-	
-	const BYTE *ip = (const BYTE *)src;
-	const BYTE *const iend = ip + srcSize;
 
-	BYTE *op = (BYTE *) dst;
-	BYTE *const oend = op + outputSize;
-	
 	BYTE *cpy;
 
 	const BYTE * const dictEnd = (const BYTE *)dictStart + dictSize;
