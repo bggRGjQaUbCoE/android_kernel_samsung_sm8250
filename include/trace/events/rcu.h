@@ -35,8 +35,6 @@ TRACE_EVENT(rcu_utilization,
 	TP_printk("%s", __entry->s)
 );
 
-#ifdef CONFIG_RCU_TRACE
-
 #if defined(CONFIG_TREE_RCU) || defined(CONFIG_PREEMPT_RCU)
 
 /*
@@ -744,41 +742,6 @@ TRACE_EVENT(rcu_barrier,
 		  __entry->rcuname, __entry->s, __entry->cpu, __entry->cnt,
 		  __entry->done)
 );
-
-#else /* #ifdef CONFIG_RCU_TRACE */
-
-#define trace_rcu_grace_period(rcuname, gp_seq, gpevent) do { } while (0)
-#define trace_rcu_future_grace_period(rcuname, gp_seq, gp_seq_req, \
-				      level, grplo, grphi, event) \
-				      do { } while (0)
-#define trace_rcu_grace_period_init(rcuname, gp_seq, level, grplo, grphi, \
-				    qsmask) do { } while (0)
-#define trace_rcu_exp_grace_period(rcuname, gqseq, gpevent) \
-	do { } while (0)
-#define trace_rcu_exp_funnel_lock(rcuname, level, grplo, grphi, gpevent) \
-	do { } while (0)
-#define trace_rcu_nocb_wake(rcuname, cpu, reason) do { } while (0)
-#define trace_rcu_preempt_task(rcuname, pid, gp_seq) do { } while (0)
-#define trace_rcu_unlock_preempted_task(rcuname, gp_seq, pid) do { } while (0)
-#define trace_rcu_quiescent_state_report(rcuname, gp_seq, mask, qsmask, level, \
-					 grplo, grphi, gp_tasks) do { } \
-	while (0)
-#define trace_rcu_fqs(rcuname, gp_seq, cpu, qsevent) do { } while (0)
-#define trace_rcu_dyntick(polarity, oldnesting, newnesting, dyntick) do { } while (0)
-#define trace_rcu_callback(rcuname, rhp, qlen_lazy, qlen) do { } while (0)
-#define trace_rcu_kfree_callback(rcuname, rhp, offset, qlen_lazy, qlen) \
-	do { } while (0)
-#define trace_rcu_batch_start(rcuname, qlen_lazy, qlen, blimit) \
-	do { } while (0)
-#define trace_rcu_invoke_callback(rcuname, rhp) do { } while (0)
-#define trace_rcu_invoke_kfree_callback(rcuname, rhp, offset) do { } while (0)
-#define trace_rcu_batch_end(rcuname, callbacks_invoked, cb, nr, iit, risk) \
-	do { } while (0)
-#define trace_rcu_torture_read(rcutorturename, rhp, secs, c_old, c) \
-	do { } while (0)
-#define trace_rcu_barrier(name, s, cpu, cnt, done) do { } while (0)
-
-#endif /* #else #ifdef CONFIG_RCU_TRACE */
 
 #endif /* _TRACE_RCU_H */
 
