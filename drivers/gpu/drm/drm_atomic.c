@@ -2594,9 +2594,9 @@ static int __drm_mode_atomic_ioctl(struct drm_device *dev, void *data,
 	   * Dont boost CPU & DDR if battery saver profile is enabled
 	   * and boost CPU & DDR for 25ms if balanced profile is enabled
 	   */
-	    devfreq_boost_kick_max(DEVFREQ_MSM_CPUBW, 50);
+	    devfreq_boost_kick_max(DEVFREQ_MSM_CPU_LLCCBW, 50);
 	  } else if (kp_active_mode() == 2) {
-	    devfreq_boost_kick_max(DEVFREQ_MSM_CPUBW, 25);
+	    devfreq_boost_kick_max(DEVFREQ_MSM_CPU_LLCCBW, 25);
 	  }
 
 	drm_modeset_acquire_init(&ctx, DRM_MODESET_ACQUIRE_INTERRUPTIBLE);
