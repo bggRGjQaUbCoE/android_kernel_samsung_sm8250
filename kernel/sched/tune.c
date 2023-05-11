@@ -682,23 +682,6 @@ bool schedtune_prefer_high_cap(struct task_struct *p)
 	return prefer_high_cap;
 }
 
-static u64 prefer_high_cap_read(struct cgroup_subsys_state *css,
-				struct cftype *cft)
-{
-	struct schedtune *st = css_st(css);
-
-	return st->prefer_high_cap;
-}
-
-static int prefer_high_cap_write(struct cgroup_subsys_state *css,
-				 struct cftype *cft, u64 prefer_high_cap)
-{
-	struct schedtune *st = css_st(css);
-	st->prefer_high_cap = !!prefer_high_cap;
-
-	return 0;
-}
-
 static u64
 prefer_idle_read(struct cgroup_subsys_state *css, struct cftype *cft)
 {
@@ -999,8 +982,6 @@ schedtune_boostgroup_init(struct schedtune *st, int idx)
 	/* Keep track of allocated boost groups */
 	allocated_group[idx] = st;
 	st->idx = idx;
-	
-	INIT_WORK(&st->dsb_work, dsb_worker);
 }
 
 #ifdef CONFIG_STUNE_ASSIST
@@ -1298,7 +1279,6 @@ exit:
 }
 
 static int _do_stune_boost(struct schedtune *st, int boost, int *slot)
->>>>>>> b8b1c29b33ea (sched/tune: Switch Dynamic Schedtune Boost to a slot-based tracking system)
 {
 	int ret = 0;
 
@@ -1356,8 +1336,8 @@ int do_stune_boost(char *st_name, int boost, int *slot)
 {
 	struct schedtune *st = stune_get_by_name(st_name);
 
-	if (likely(st->is_boosting) && likely(st)) {
-		st->is_boosting = false;
+	if (!st)
+		return -EINVAL;
 
 	return _do_stune_boost(st, boost, slot);
 }
