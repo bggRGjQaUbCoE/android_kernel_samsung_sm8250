@@ -104,7 +104,7 @@
 
 #ifdef CONFIG_TASK_DELAY_ACCT
 #include <linux/delayacct.h>
-#endif#ifdef CONFIG_PROCESS_RECLAIM
+#endif
 
 #include "../../lib/kstrtox.h"
 

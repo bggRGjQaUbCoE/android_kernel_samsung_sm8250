@@ -1508,7 +1508,7 @@ exit:
 	trace_cpu_idle_exit(idx, success);
 	sec_debug_cpu_lpm_log(dev->cpu, idx, success, 0);
 
-	if (lpm_prediction && cpu->lpm_prediction) {
+	if (lpm_prediction_enabled && cpu->lpm_prediction) {
 		histtimer_cancel();
 		clusttimer_cancel();
 	}
