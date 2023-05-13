@@ -275,7 +275,7 @@ static int msm_smmu_map_dma_buf(struct msm_mmu *mmu, struct sg_table *sgt,
 				dir, attrs, client->secure);
 	}
 
-#if defined(CONFIG_DISPLAY_SAMSUNG)
+#ifdef CONFIG_SEC_DEBUG
 	if (sec_debug_is_enabled() && sgt && sgt->sgl)
 		ss_smmu_debug_map(SMMU_RT_DISPLAY_DEBUG, sgt);
 #endif
@@ -302,7 +302,7 @@ static void msm_smmu_unmap_dma_buf(struct msm_mmu *mmu, struct sg_table *sgt,
 				dir, client->secure);
 	}
 
-#if defined(CONFIG_DISPLAY_SAMSUNG)
+#ifdef CONFIG_SEC_DEBUG
 	if (sec_debug_is_enabled() && sgt && sgt->sgl)
 		ss_smmu_debug_unmap(SMMU_RT_DISPLAY_DEBUG, sgt);
 #endif

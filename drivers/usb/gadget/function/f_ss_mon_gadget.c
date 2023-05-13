@@ -194,7 +194,7 @@ static void ss_monitor_disable(struct usb_function *f)
 	ss_monitor = func_to_ss_monitor(f);
 	if (ss_monitor && ss_monitor->accessory_string && ss_monitor->aoa_start_cmd) {
 		snprintf(aoa_check, sizeof(aoa_check), "AOA_ERR_%x", ss_monitor->accessory_string);
-		store_usblog_notify(NOTIFY_USBMODE_EXTRA, (void *)aoa_check, NULL);
+		//store_usblog_notify(NOTIFY_USBMODE_EXTRA, (void *)aoa_check, NULL);
 	}
 	ss_monitor->accessory_string = 0;
 	ss_monitor->aoa_start_cmd = 0;
@@ -337,8 +337,8 @@ static int ss_monitor_setup(struct usb_function *f,
 #if defined(CONFIG_USB_NOTIFY_PROC_LOG) && IS_MODULE(CONFIG_USB_DWC3)
 					ss_monitor->aoa_start_cmd = 1;
 					if (!is_aoa_string_come(ss_monitor->accessory_string))
-						store_usblog_notify(NOTIFY_USBMODE_EXTRA,
-							(void *)"AOA_STR_ERR", NULL);
+						//store_usblog_notify(NOTIFY_USBMODE_EXTRA,
+							//(void *)"AOA_STR_ERR", NULL);
 #endif
 				} else if (ctrl->bRequest == ACCESSORY_SEND_STRING) {
 					ss_monitor->accessory_string |= 0x1 << w_index;
@@ -494,7 +494,7 @@ static int usb_configuration_name(struct usb_configuration *config, struct usb_f
 	}
 	ss_monitor->usb_mode[length-1] = 0;
 	if (use_ffs_mtp)
-		store_usblog_notify(NOTIFY_USBMODE_EXTRA, (void *)ss_monitor->usb_mode, NULL);
+		//store_usblog_notify(NOTIFY_USBMODE_EXTRA, (void *)ss_monitor->usb_mode, NULL);
 	pr_info("usb: %s : ss_mon: usb_mode: %s\n", __func__, ss_monitor->usb_mode);
 }
 #endif

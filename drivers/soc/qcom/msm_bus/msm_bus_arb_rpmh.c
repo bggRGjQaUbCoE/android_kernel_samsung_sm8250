@@ -1149,7 +1149,7 @@ static void unregister_client_adhoc(uint32_t cl)
 						pdata->active_only);
 	}
 	commit_data();
-	msm_bus_dbg_client_data(client->pdata, MSM_BUS_DBG_UNREGISTER, cl);
+	//msm_bus_dbg_client_data(client->pdata, MSM_BUS_DBG_UNREGISTER, cl);
 	kfree(client->src_pnode);
 	kfree(client->src_devs);
 	kfree(client);
@@ -1320,8 +1320,7 @@ static uint32_t register_client_adhoc(struct msm_bus_scale_pdata *pdata)
 	}
 
 	handle = gen_handle(client);
-	msm_bus_dbg_client_data(client->pdata, MSM_BUS_DBG_REGISTER,
-					handle);
+	//msm_bus_dbg_client_data(client->pdata, MSM_BUS_DBG_REGISTER, handle);
 	MSM_BUS_DBG("%s:Client handle %d %s", __func__, handle,
 						client->pdata->name);
 	rt_mutex_unlock(&msm_bus_adhoc_lock);
@@ -1582,7 +1581,7 @@ static int update_context(uint32_t cl, bool active_only,
 
 	pdata->active_only = active_only;
 
-	msm_bus_dbg_client_data(client->pdata, ctx_idx, cl);
+	//msm_bus_dbg_client_data(client->pdata, ctx_idx, cl);
 	ret = update_client_paths(client, ctx_idx);
 	if (ret) {
 		pr_err("%s: Err updating path\n", __func__);
@@ -1642,7 +1641,7 @@ static int update_request_adhoc(uint32_t cl, unsigned int index)
 	if (pdata->alc)
 		ret = update_client_alc(client, index);
 	else {
-		msm_bus_dbg_client_data(client->pdata, index, cl);
+		//msm_bus_dbg_client_data(client->pdata, index, cl);
 		ret = update_client_paths(client, index);
 	}
 	if (ret) {
@@ -1893,7 +1892,7 @@ static void unregister_adhoc(struct msm_bus_client_handle *cl)
 	remove_path(cl->mas_dev, cl->slv, cl->cur_act_ib, cl->cur_act_ab,
 				cl->first_hop, cl->active_only);
 	commit_data();
-	msm_bus_dbg_remove_client(cl);
+	//msm_bus_dbg_remove_client(cl);
 	kfree(cl);
 	MSM_BUS_DBG("%s: Unregistered client", __func__);
 exit_unregister_client:
@@ -1953,7 +1952,7 @@ register_adhoc(uint32_t mas, uint32_t slv, char *name, bool active_only)
 
 	MSM_BUS_DBG("%s:Client handle %p %s", __func__, client,
 						client->name);
-	msm_bus_dbg_add_client(client);
+	//msm_bus_dbg_add_client(client);
 exit_register:
 	rt_mutex_unlock(&msm_bus_adhoc_lock);
 	return client;

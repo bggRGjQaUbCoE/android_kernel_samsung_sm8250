@@ -129,12 +129,7 @@ void ss_smmu_debug_unmap(enum ss_smmu_type type, struct sg_table *table);
 void ss_smmu_debug_log(void);
 void ss_image_logging_update(uint32_t plane_addr, int width, int height, int src_format);
 
-bool ss_read_debug_partition(struct lcd_debug_t *value);
-bool ss_write_debug_partition(struct lcd_debug_t *value);
-
 void ss_inc_ftout_debug(const char *name);
-int ss_write_fw_up_debug_partition(enum FW_UP_OP op, uint32_t addr);
-void ss_read_fw_up_debug_partition(void);
 
 #if 0 // tmp, comment in until SS bsp team bringup sec debug feature...
 extern bool read_debug_partition(enum debug_partition_index index, void *value);

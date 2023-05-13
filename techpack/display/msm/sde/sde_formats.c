@@ -1025,7 +1025,7 @@ static int _sde_format_populate_addrs_ubwc(
 	}
 done:
 
-#if defined(CONFIG_DISPLAY_SAMSUNG)
+#ifdef CONFIG_SEC_DEBUG
 	if (sec_debug_is_enabled()) {
 		ss_image_logging_update(base_addr,
 			layout->width, layout->height,
