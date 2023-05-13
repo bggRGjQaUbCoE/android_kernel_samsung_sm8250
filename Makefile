@@ -373,7 +373,7 @@ HOSTCC	= gcc
 HOSTCXX	= g++
 endif
 KBUILD_HOSTCFLAGS   := -Wall -Wmissing-prototypes -O2 \
-		-fomit-frame-pointer -std=gnu89 $(HOST_LFS_CFLAGS) \
+		-fomit-frame-pointer -std=gnu99 $(HOST_LFS_CFLAGS) \
 		$(HOSTCFLAGS)
 KBUILD_HOSTCXXFLAGS := -O2 $(HOST_LFS_CFLAGS) $(HOSTCXXFLAGS)
 KBUILD_HOSTLDFLAGS  := $(HOST_LFS_LDFLAGS) $(HOSTLDFLAGS)
@@ -456,7 +456,7 @@ KBUILD_CFLAGS   := -Wall -Wundef -Wno-trigraphs \
 		   -Wno-declaration-after-statement \
 		   -Wno-pointer-compare \
 		   -Wno-int-conversion \
-		   -std=gnu89
+		   -std=gnu99
 KBUILD_CPPFLAGS := -D__KERNEL__
 KBUILD_AFLAGS_KERNEL :=
 KBUILD_CFLAGS_KERNEL :=
