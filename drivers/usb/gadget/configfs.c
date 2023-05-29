@@ -28,8 +28,6 @@ static char product_string[256];
 #include "function/u_ncm.h"
 #endif
 
-#include <linux/power_supply.h>
-
 #ifdef CONFIG_USB_CONFIGFS_F_ACC
 extern int acc_ctrlrequest_composite(struct usb_composite_dev *cdev,
 				const struct usb_ctrlrequest *ctrl);
@@ -1547,27 +1545,6 @@ err_comp_cleanup:
 	return ret;
 }
 
-static int smblib_canncel_recheck(void)
-{
-	union power_supply_propval pval = {0};
-	struct power_supply     *usb_psy = NULL;
-	int rc = 0;
-
-	if (!usb_psy) {
-		usb_psy = power_supply_get_by_name("usb");
-		if (!usb_psy) {
-			pr_err("Could not get usb psy by canncel recheck\n");
-			return -ENODEV;
-		}
-	}
-
-	pval.intval = 0;
-	rc = power_supply_set_property(usb_psy,
-				POWER_SUPPLY_PROP_TYPE_RECHECK, &pval);
-
-	return rc;
-}
-
 #ifdef CONFIG_USB_CONFIGFS_UEVENT
 static void android_work(struct work_struct *data)
 {
@@ -1630,7 +1607,6 @@ static void android_work(struct work_struct *data)
 #endif
 		pr_info("usb: %s sent uevent %s\n", __func__, configured[0]);
 		uevent_sent = true;
-		smblib_canncel_recheck();
 	}
 
 	if (status[2]) {
