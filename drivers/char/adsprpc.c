@@ -2581,6 +2581,7 @@ static int fastrpc_init_process(struct fastrpc_file *fl,
 				__func__);
 			return err;
 		}
+
 		ra[0].buf.pv = (void *)&tgid;
 		ra[0].buf.len = sizeof(tgid);
 		ioctl.inv.handle = FASTRPC_STATIC_HANDLE_PROCESS_GROUP;

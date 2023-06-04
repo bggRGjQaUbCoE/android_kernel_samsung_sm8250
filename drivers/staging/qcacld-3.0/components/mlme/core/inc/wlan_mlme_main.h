@@ -617,4 +617,5 @@ void mlme_reinit_control_config_lfr_params(struct wlan_objmgr_psoc *psoc,
  * Return: if vdev is up
  */
 bool wlan_is_vdev_id_up(struct wlan_objmgr_pdev *pdev, uint8_t vdev_id);
+
 #endif

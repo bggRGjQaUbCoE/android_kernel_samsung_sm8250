@@ -2407,9 +2407,9 @@ done:
 			deliver_list_tail = NULL;
 		}
 
-		/* Get TID from struct cb->tid_val, save to tid */
+ 		/* Get TID from struct cb->tid_val, save to tid */
 		if (qdf_nbuf_is_rx_chfrag_start(nbuf)) {
-			tid = qdf_nbuf_get_tid_val(nbuf);
+ 			tid = qdf_nbuf_get_tid_val(nbuf);
 			if (tid >= CDP_MAX_DATA_TIDS) {
 				DP_STATS_INC(soc, rx.err.rx_invalid_tid_err, 1);
 				qdf_nbuf_free(nbuf);

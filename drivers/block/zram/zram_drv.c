@@ -556,7 +556,6 @@ static int read_from_bdev_async(struct zram *zram, struct bio_vec *bvec,
 #define PAGE_WRITEBACK 0
 #define IDLE_WRITEBACK 1
 
-
 static ssize_t writeback_store(struct device *dev,
 		struct device_attribute *attr, const char *buf, size_t len)
 {

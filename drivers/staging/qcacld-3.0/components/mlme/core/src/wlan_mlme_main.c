@@ -3132,5 +3132,6 @@ bool wlan_is_vdev_id_up(struct wlan_objmgr_pdev *pdev, uint8_t vdev_id)
 	}
 
 	return is_up;
+
 }
 #endif

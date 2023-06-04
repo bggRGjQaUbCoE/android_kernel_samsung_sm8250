@@ -576,9 +576,9 @@ int esoc_do_silentreset(void)
 		return -1;
 
 	dev = mdm->dev;
-
+	
 	pr_err("%s Force Modem Silent Reset\n", __func__);
-
+	
 	subsys_set_modem_silent_ssr(true);
 
 	if(gpio_is_valid(MDM_GPIO(mdm, AP2MDM_ERRFATAL2))) {
