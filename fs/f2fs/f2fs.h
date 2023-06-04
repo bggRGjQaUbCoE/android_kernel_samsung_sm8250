@@ -1029,7 +1029,7 @@ enum nid_state {
 	PREALLOC_NID,		/* it is preallocated */
 	MAX_NID_STATE,
 };
-
+ 
 enum nat_state {
 	TOTAL_NAT,
 	DIRTY_NAT,
