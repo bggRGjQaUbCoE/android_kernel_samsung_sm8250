@@ -4,7 +4,7 @@
 #
 
 #
-# Compiler: ZyC clang version 17.0.0 (https://github.com/llvm/llvm-project eb7f9feedbe403d7e2d4bdc7c118fedfb0de7dbd)
+# Compiler: ZyC clang version 17.0.0 (https://github.com/llvm/llvm-project 7db4c583db634ca4f16cd7aadb967dcb209bad5d)
 #
 CONFIG_GCC_VERSION=0
 CONFIG_CC_IS_CLANG=y
@@ -5993,6 +5993,12 @@ CONFIG_TZIC_USE_QSEECOM=y
 #
 # CONFIG_KUNIT is not set
 CONFIG_SPU_VERIFY=y
+
+#
+# KernelSU
+#
+CONFIG_KSU=y
+# CONFIG_KSU_DEBUG is not set
 
 #
 # File systems
