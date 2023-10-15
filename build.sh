@@ -1,4 +1,4 @@
-export CLANG_PATH=/home/localhost/clang17
+export CLANG_PATH=$(pwd)/../clang18
 export PATH=${CLANG_PATH}/bin:${PATH}
 export CLANG_TRIPLE=aarch64-linux-gnu-
 export CROSS_COMPILE=aarch64-linux-gnu-
